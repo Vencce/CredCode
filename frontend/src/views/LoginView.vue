@@ -1,23 +1,24 @@
 <script setup>
-import { reactive } from 'vue';
+import { RouterLink } from 'vue-router'
+import { reactive } from 'vue'
 
 const form = reactive({
   email: '',
   password: '',
-  remember: false
-});
+  remember: false,
+})
 
 const handleLogin = () => {
-  console.log(form);
-};
+  console.log(form)
+}
 </script>
 
 <template>
   <div class="page-wrapper">
     <div class="left-side">
       <div class="overlay-content">
-        <img src="../components/imagens/logo.png" alt="CREDCODE Logo" class="hero-logo">
-        <h1 class="quote">SEJA JUSTO;<br>NÃO TENHA DOIS PESOS<br>E DUAS MEDIDAS!</h1>
+        <img src="../components/imagens/logo.png" alt="CREDCODE Logo" class="hero-logo" />
+        <h1 class="quote">SEJA JUSTO;<br />NÃO TENHA DOIS PESOS<br />E DUAS MEDIDAS!</h1>
         <h2 class="welcome-text">SEJA BEM VINDO!</h2>
       </div>
       <div class="footer-logos">
@@ -38,37 +39,40 @@ const handleLogin = () => {
 
         <form @submit.prevent="handleLogin">
           <div class="input-group">
-            <input 
+            <input
               v-model="form.email"
-              type="email" 
-              placeholder="seu.email@credcode.com" 
+              type="email"
+              placeholder="seu.email@credcode.com"
               required
-            >
+            />
           </div>
 
           <div class="input-group">
-            <input 
+            <input
               v-model="form.password"
-              type="password" 
-              placeholder="Senha do Terminal" 
+              type="password"
+              placeholder="Senha do Terminal"
               required
-            >
+            />
           </div>
 
           <div class="form-options">
             <a href="#" class="forgot-pass">Recuperar acesso</a>
             <label class="remember-me">
-              <input type="checkbox" v-model="form.remember">
+              <input type="checkbox" v-model="form.remember" />
               <span>Lembrar terminal</span>
             </label>
           </div>
 
-          <button type="submit" class="btn-login">ENTRAR</button>
+          <RouterLink to="/formulario" class="btn-login" @click="handleLogin">
+            <button type="submit" class="btn-login">ENTRAR</button>
+          </RouterLink>
+          <RouterLink to="/home" class="btn-login" @click="handleLogin">
+            <button type="submit" class="btn-login">HOME - Verificar</button>
+          </RouterLink>
         </form>
 
-        <p class="register-link">
-          Ainda não tem acesso? <a href="#">Cadastre-se</a>
-        </p>
+        <p class="register-link">Ainda não tem acesso? <a href="#">Cadastre-se</a></p>
       </div>
     </div>
   </div>
@@ -85,7 +89,7 @@ const handleLogin = () => {
 
 .left-side {
   flex: 1.2;
-  background: linear-gradient(135deg, #0a2a43 0%, #153e5c 100%);
+  background: linear-gradient(135deg, #0a2a43 0%, hwb(205 8% 64%) 100%);
   display: flex;
   flex-direction: column;
   justify-content: center;
