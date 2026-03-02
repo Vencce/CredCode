@@ -1,22 +1,20 @@
 name: CI - Build and Push Docker Image
 
-# O workflow será acionado toda vez que houver um push na branch "main" ou "master"
 on:
   push:
     branches:
       - main
       - master
 
-# Define variáveis de ambiente que usaremos nos passos abaixo
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }} # Ficará algo como "seu-usuario/projeto_financeiro"
+  # Vamos definir o nome da imagem como o caminho do repositório, mas em letras minúsculas abaixo
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-push-image:
     runs-on: ubuntu-latest
 
-    # Permissões necessárias para que o GitHub Actions consiga publicar a imagem no seu repositório
     permissions:
       contents: read
       packages: write
@@ -25,19 +23,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # TRUQUE DE DEVOPS: Converter o nome do repositório para minúsculas
+      - name: Lowercase IMAGE_NAME
+        run: |
+          echo "IMAGE_NAME_LOWER=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
+
       - name: Log in to the Container registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }} # Token automático do GitHub, não precisa configurar nada!
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          # Define as tags da imagem. Aqui usaremos "latest" para a main e o SHA do commit para rastreabilidade
+          # Usamos a variável em minúsculo aqui
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=short
@@ -45,8 +48,9 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          # O contexto é a pasta onde está o nosso Dockerfile (conforme a estrutura que criamos)
-          context: ./backend
+          # ATENÇÃO AQUI: Se o seu Dockerfile está na raiz do projeto, use "."
+          # Se ele estiver dentro de uma pasta chamada backend, mantenha "./backend"
+          context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
