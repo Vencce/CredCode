@@ -1,27 +1,50 @@
-@import './base.css';
-
-#app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  font-weight: normal;
+:root {
+  --primary-color: #1e3a8a;
+  --secondary-color: #10b981;
+  --bg-color: #f3f4f6;
+  --text-color: #1f2937;
+  --white: #ffffff;
+  --gray-light: #e5e7eb;
+  --primary-blue: #1e3a8a;
+  --primary-dark: #0f172a;
+  --brand-yellow: #F6D001; /* Sua cor exata */
+  --brand-yellow-soft: #FFFBEB; /* Fundo suave para o amarelo */
+  --text-main: #1e293b;
+  --text-muted: #64748b;
+  --bg-app: #F1F5F9;
+  --border-color: #E2E8F0;
+  
+  /* Sombras Premium */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-yellow: 0 4px 14px 0 rgba(246, 208, 1, 0.3);
 }
 
-@media (hover: hover) {
-  a:hover {
-    background-color: hsla(160, 100%, 37%, 0.2);
-  }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-@media (min-width: 1024px) {
-  body {
-    display: flex;
-    place-items: center;
-  }
-
-  #app {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    padding: 0 2rem;
-  }
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  -webkit-font-smoothing: antialiased;
 }
+
+button {
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+}
+
+/* Reset básico para inputs e botões ficarem consistentes */
+input, select, textarea, button { font-family: inherit; }
+
+/* Scrollbar personalizada mais limpa */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
