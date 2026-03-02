@@ -1,280 +1,272 @@
+<script setup>
+import { reactive } from 'vue';
+
+const form = reactive({
+  email: '',
+  password: '',
+  remember: false
+});
+
+const handleLogin = () => {
+  console.log(form);
+};
+</script>
+
 <template>
-  <div class="login-container">
-    <div class="header">
-      <div class="logo-box">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
+  <div class="page-wrapper">
+    <div class="left-side">
+      <div class="overlay-content">
+        <img src="../components/imagens/logo.png" alt="CREDCODE Logo" class="hero-logo">
+        <h1 class="quote">SEJA JUSTO;<br>NÃO TENHA DOIS PESOS<br>E DUAS MEDIDAS!</h1>
+        <h2 class="welcome-text">SEJA BEM VINDO!</h2>
       </div>
-      <h1>FinanceApp</h1>
-      <p>Controle as suas finanças pessoais</p>
+      <div class="footer-logos">
+        <div class="divider-line"></div>
+        <div class="logos-container">
+          <p class="footer-tagline">TERMINAL FINANCEIRO: O CAMINHO DA LÓGICA</p>
+        </div>
+      </div>
     </div>
 
-    <div class="card">
-      <h2>Entrar</h2>
-      
-      <form @submit.prevent="handleLogin">
-        <div class="form-group">
-          <label for="email">E-mail</label>
-          <input 
-            v-model="form.email"
-            type="email" 
-            id="email" 
-            placeholder="exemplo@email.com" 
-            required
-          >
+    <div class="right-side">
+      <div class="login-box">
+        <div class="form-header">
+          <h2 class="main-logo">CRED<span>CODE</span></h2>
         </div>
 
-        <div class="form-group">
-          <a href="#" class="forgot-link">Esqueceu-se?</a>
-          <label for="password">Palavra-passe</label>
-          <input 
-            v-model="form.password"
-            type="password" 
-            id="password" 
-            placeholder="••••••••" 
-            required
-          >
-        </div>
+        <h3 class="login-title">Acesse o Terminal</h3>
 
-        <button type="submit" class="btn-submit">
-          Aceder à conta
-        </button>
-      </form>
+        <form @submit.prevent="handleLogin">
+          <div class="input-group">
+            <input 
+              v-model="form.email"
+              type="email" 
+              placeholder="seu.email@credcode.com" 
+              required
+            >
+          </div>
 
-      <div class="divider">
-        <span>Ou entrar com</span>
+          <div class="input-group">
+            <input 
+              v-model="form.password"
+              type="password" 
+              placeholder="Senha do Terminal" 
+              required
+            >
+          </div>
+
+          <div class="form-options">
+            <a href="#" class="forgot-pass">Recuperar acesso</a>
+            <label class="remember-me">
+              <input type="checkbox" v-model="form.remember">
+              <span>Lembrar terminal</span>
+            </label>
+          </div>
+
+          <button type="submit" class="btn-login">ENTRAR</button>
+        </form>
+
+        <p class="register-link">
+          Ainda não tem acesso? <a href="#">Cadastre-se</a>
+        </p>
       </div>
-
-      <div class="social-buttons">
-        <button class="btn-social" @click="socialLogin('Google')">
-          <img src="https://www.svgrepo.com/show/355037/google.svg" alt="Google">
-          Google
-        </button>
-        <button class="btn-social" @click="socialLogin('Apple')">
-          <img src="https://www.svgrepo.com/show/448234/apple.svg" alt="Apple">
-          Apple
-        </button>
-      </div>
-
-      <p class="register-text">
-        Novo por aqui? <a href="#">Criar conta</a>
-      </p>
     </div>
   </div>
 </template>
 
-<script setup>
-import { reactive } from 'vue';
-
-// Estado reativo para os campos do formulário
-const form = reactive({
-  email: '',
-  password: ''
-});
-
-// Função para lidar com o login
-const handleLogin = () => {
-  console.log('Dados de login:', form);
-  alert(`Login tentado para: ${form.email}`);
-};
-
-// Função para login social
-const socialLogin = (provider) => {
-  console.log(`Login com ${provider}`);
-};
-</script>
-
 <style scoped>
-/* O "scoped" garante que o CSS abaixo afete apenas este componente */
-:root {
-  --primary-color: #4f46e5;
-  --primary-hover: #4338ca;
-  --bg-gradient: linear-gradient(135deg, #4f46e5 0%, #2563eb 100%);
-  --text-main: #1e293b;
-  --text-muted: #64748b;
-  --white: #ffffff;
-  --border: #e2e8f0;
-  --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-}
-
-.login-container {
-  width: 100%;
-  max-width: 400px;
-  margin: auto; /* Centraliza se estiver num container flex */
-}
-
-.header {
-  text-align: center;
-  margin-bottom: 30px;
-}
-
-.logo-box {
-  background: var(--white);
-  width: 64px;
-  height: 64px;
-  border-radius: 16px;
+.page-wrapper {
   display: flex;
-  align-items: center;
+  width: 100%;
+  min-height: 100vh;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  background-color: #ffffff;
+}
+
+.left-side {
+  flex: 1.2;
+  background: linear-gradient(135deg, #0a2a43 0%, #153e5c 100%);
+  display: flex;
+  flex-direction: column;
   justify-content: center;
-  margin: 0 auto 15px;
-  box-shadow: var(--shadow);
-}
-
-.logo-box svg {
-  color: var(--primary-color);
-  width: 40px;
-  height: 40px;
-}
-
-.header h1 {
-  color: var(--white);
-  font-size: 28px;
-  font-weight: 700;
-  margin-bottom: 5px;
-}
-
-.header p {
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 14px;
-}
-
-.card {
-  background: rgba(255, 255, 255, 0.98);
+  align-items: center;
+  position: relative;
   padding: 40px;
-  border-radius: 24px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
-  color: var(--text-main);
+  color: white;
 }
 
-.card h2 {
-  font-size: 22px;
-  margin-bottom: 25px;
+.hero-logo {
+  max-width: 280px;
+  margin-bottom: 40px;
+}
+
+.overlay-content {
+  text-align: center;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.quote {
+  font-size: 2.8rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  line-height: 1.1;
+  letter-spacing: 1px;
+  margin-bottom: 30px;
+  color: #ffffff;
+}
+
+.welcome-text {
+  font-size: 2rem;
   font-weight: 700;
+  text-transform: uppercase;
+  color: #f7b500;
 }
 
-.form-group {
+.footer-logos {
+  width: 80%;
+  margin-bottom: 40px;
+}
+
+.divider-line {
+  height: 2px;
+  background: #f7b500;
+  width: 100%;
   margin-bottom: 20px;
 }
 
-.form-group label {
-  display: block;
-  font-size: 14px;
+.footer-tagline {
+  font-size: 0.9rem;
+  letter-spacing: 2px;
   font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.form-group input {
-  width: 100%;
-  padding: 12px 16px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  outline: none;
-  transition: all 0.2s;
-  font-size: 15px;
-}
-
-.form-group input:focus {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
-}
-
-.forgot-link {
-  float: right;
-  font-size: 12px;
-  color: var(--primary-color);
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.btn-submit {
-  width: 100%;
-  background: var(--primary-color);
-  color: var(--white);
-  border: none;
-  padding: 14px;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.2s, transform 0.1s;
-  margin-top: 10px;
-}
-
-.btn-submit:hover {
-  background: var(--primary-hover);
-}
-
-.btn-submit:active {
-  transform: scale(0.98);
-}
-
-.divider {
-  margin: 30px 0;
   text-align: center;
-  position: relative;
 }
 
-.divider::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: var(--border);
-  z-index: 1;
-}
-
-.divider span {
-  background: var(--white);
-  padding: 0 15px;
-  font-size: 13px;
-  color: var(--text-muted);
-  position: relative;
-  z-index: 2;
-}
-
-.social-buttons {
-  display: grid;
-  grid-template-cols: 1fr 1fr;
-  gap: 15px;
-}
-
-.btn-social {
+.right-side {
+  flex: 0.8;
+  background: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--white);
-  cursor: pointer;
-  font-size: 14px;
+  padding: 40px;
+}
+
+.login-box {
+  width: 100%;
+  max-width: 380px;
+}
+
+.form-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.main-logo {
+  font-size: 3.2rem;
+  margin: 0;
+  font-weight: 900;
+  color: #0a2a43;
+  letter-spacing: -1px;
+}
+
+.main-logo span {
+  color: #f7b500;
+}
+
+.login-title {
+  font-size: 1.1rem;
+  margin-bottom: 25px;
+  color: #0a2a43;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border-left: 4px solid #f7b500;
+  padding-left: 10px;
+}
+
+.input-group {
+  margin-bottom: 15px;
+}
+
+.input-group input {
+  width: 100%;
+  padding: 16px;
+  border: 1px solid #e0e6ed;
+  background-color: #f8fafc;
+  border-radius: 8px;
+  font-size: 1rem;
+  outline: none;
+  transition: all 0.3s;
+}
+
+.input-group input:focus {
+  border-color: #0a2a43;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(10, 42, 67, 0.1);
+}
+
+.form-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  font-size: 0.85rem;
+}
+
+.forgot-pass {
+  color: #0a2a43;
+  text-decoration: none;
   font-weight: 600;
-  transition: background 0.2s;
 }
 
-.btn-social:hover {
-  background: #f8fafc;
+.remember-me {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #64748b;
+  cursor: pointer;
 }
 
-.btn-social img {
-  width: 20px;
-  height: 20px;
+.btn-login {
+  width: 100%;
+  padding: 16px;
+  background-color: #f7b500;
+  color: #0a2a43;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 14px rgba(247, 181, 0, 0.3);
 }
 
-.register-text {
+.btn-login:hover {
+  background-color: #e6a800;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(247, 181, 0, 0.4);
+}
+
+.register-link {
   text-align: center;
   margin-top: 30px;
-  font-size: 14px;
-  color: var(--text-muted);
+  font-size: 0.9rem;
+  color: #64748b;
 }
 
-.register-text a {
-  color: var(--primary-color);
-  text-decoration: none;
+.register-link a {
+  color: #0a2a43;
   font-weight: 700;
+  text-decoration: none;
+}
+
+@media (max-width: 1024px) {
+  .left-side {
+    display: none;
+  }
 }
 </style>
