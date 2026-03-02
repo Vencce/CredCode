@@ -50,7 +50,7 @@ jobs:
         with:
           # ATENÇÃO AQUI: Se o seu Dockerfile está na raiz do projeto, use "."
           # Se ele estiver dentro de uma pasta chamada backend, mantenha "./backend"
-          context: .
+          context: ./backend
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
