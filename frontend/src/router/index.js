@@ -18,6 +18,11 @@ const router = createRouter({
       name: 'formulario',
       component: () => import('../views/OnboardingView.vue'),
     },
+    {
+      path: '/cadastro',
+      name: 'cadastro',
+      component: () => import('../views/CadastroView.vue'),
+    }
   ],
 })
 

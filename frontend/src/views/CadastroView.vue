@@ -3,13 +3,18 @@ import { RouterLink } from 'vue-router'
 import { reactive } from 'vue'
 
 const form = reactive({
+  name: '',
   email: '',
   password: '',
-  remember: false,
+  confirmPassword: '',
 })
 
-const handleLogin = () => {
-  console.log(form)
+const handleRegister = () => {
+  if (form.password !== form.confirmPassword) {
+    alert("As senhas não conferem!")
+    return
+  }
+  console.log('Dados de Cadastro:', form)
 }
 </script>
 
@@ -18,8 +23,8 @@ const handleLogin = () => {
     <div class="left-side">
       <div class="overlay-content">
         <img src="../components/imagens/logo_cortada.png" alt="CREDCODE Logo" class="hero-logo" />
-        <h1 class="quote">SEJA JUSTO.<br />NÃO TENHA DOIS PESOS<br />E DUAS MEDIDAS!</h1>
-        <h2 class="welcome-text">SEJA BEM VINDO!</h2>
+        <h1 class="quote">INVISTA COM LÓGICA;<br />CRIE O SEU FUTURO<br />NO TERMINAL!</h1>
+        <h2 class="welcome-text">CADASTRE-SE AGORA</h2>
       </div>
       <div class="footer-logos">
         <div class="divider-line"></div>
@@ -35,9 +40,18 @@ const handleLogin = () => {
           <h2 class="main-logo">CRED<span>CODE</span></h2>
         </div>
 
-        <h3 class="login-title">Acesse o Terminal</h3>
+        <h3 class="login-title">Criar Nova Conta</h3>
 
-        <form @submit.prevent="handleLogin">
+        <form @submit.prevent="handleRegister">
+          <div class="input-group">
+            <input
+              v-model="form.name"
+              type="text"
+              placeholder="Nome completo"
+              required
+            />
+          </div>
+
           <div class="input-group">
             <input
               v-model="form.email"
@@ -56,23 +70,22 @@ const handleLogin = () => {
             />
           </div>
 
-          <div class="form-options">
-            <a href="#" class="forgot-pass">Recuperar acesso</a>
-            <label class="remember-me">
-              <input type="checkbox" v-model="form.remember" />
-              <span>Lembrar terminal</span>
-            </label>
+          <div class="input-group">
+            <input
+              v-model="form.confirmPassword"
+              type="password"
+              placeholder="Confirme sua senha"
+              required
+            />
           </div>
 
-          <RouterLink to="/formulario" class="btn-login" @click="handleLogin">
-            <button type="submit" class="btn-login">ENTRAR</button>
-          </RouterLink>
-          <RouterLink to="/home" class="btn-login" @click="handleLogin">
-            <button type="submit" class="btn-login">HOME - Verificar</button>
-          </RouterLink>
+          <button type="submit" class="btn-login">CADASTRAR</button>
         </form>
 
-        <p class="register-link">Ainda não tem acesso? <RouterLink to="/cadastro">Cadastre-se</RouterLink></p>
+        <p class="register-link">
+          Já possui uma conta? 
+          <RouterLink to="/">Acesse aqui</RouterLink>
+        </p>
       </div>
     </div>
   </div>
@@ -212,28 +225,6 @@ const handleLogin = () => {
   box-shadow: 0 0 0 3px rgba(10, 42, 67, 0.1);
 }
 
-.form-options {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 30px;
-  font-size: 0.85rem;
-}
-
-.forgot-pass {
-  color: #0a2a43;
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.remember-me {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #64748b;
-  cursor: pointer;
-}
-
 .btn-login {
   width: 100%;
   padding: 16px;
@@ -247,6 +238,7 @@ const handleLogin = () => {
   cursor: pointer;
   transition: all 0.3s;
   box-shadow: 0 4px 14px rgba(247, 181, 0, 0.3);
+  margin-top: 10px;
 }
 
 .btn-login:hover {
