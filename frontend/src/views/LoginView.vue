@@ -97,7 +97,7 @@ const handleLogin = () => {
   position: relative;
   padding: 40px;
   color: white;
-}
+} 
 
 .hero-logo {
   max-width: 280px;

@@ -1,199 +1,357 @@
 <script setup>
 import { ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
-const isMenuOpen = ref(false)
+const route = useRoute()
+const sidebarOpen = ref(true)
+const isMobileMenuOpen = ref(false)
 
-const toggleMenu = () => {
-  isMenuOpen.value = !isMenuOpen.value
+// Alterna o menu no desktop (recolhe/expande)
+const toggleSidebar = () => {
+  sidebarOpen.value = !sidebarOpen.value
 }
 
-const closeMenu = () => {
-  isMenuOpen.value = false
+// Alterna o menu no mobile (abre/fecha como overlay)
+const toggleMobileMenu = () => {
+  isMobileMenuOpen.value = !isMobileMenuOpen.value
+}
+
+const closeMobileMenu = () => {
+  isMobileMenuOpen.value = false
+}
+
+// Verifica se a rota está ativa
+const isActive = (path) => {
+  return route.path === path
 }
 </script>
 
 <template>
-  <header class="main-header">
-    <div class="header-container">
-      <div class="logo-area">
-        <RouterLink to="/" @click="closeMenu">
-          <img alt="Capital X Invest" class="brand-logo" />
-        </RouterLink>
+  <div class="dashboard-layout">
+    <div v-if="isMobileMenuOpen" class="mobile-overlay" @click="closeMobileMenu"></div>
+
+    <aside :class="['sidebar', { closed: !sidebarOpen, 'mobile-open': isMobileMenuOpen }]">
+      <div class="sidebar-header">
+        <div class="logo-area">
+          <img v-if="sidebarOpen" src="../components/imagens/logo.png" alt="Capital X Invest" class="brand-logo" />
+          <strong v-else class="brand-icon-collapsed">CX</strong>
+        </div>
       </div>
-      
-      <div v-if="isMenuOpen" class="menu-overlay" @click="closeMenu"></div>
 
-      <nav class="nav-menu" :class="{ 'is-open': isMenuOpen }">
-        <button class="btn-close-menu" @click="toggleMenu">
-          <X :size="30" />
-        </button>
+      <nav class="sidebar-nav">
+        <ul>
+          <li :class="{ active: isActive('/home') }">
+            <RouterLink to="/home" @click="closeMobileMenu">
+              <i class="fa-solid fa-house icon-menu"></i>
+              <span v-if="sidebarOpen">Home</span>
+            </RouterLink>
+          </li>
 
-        <RouterLink to="/quem-somos" class="nav-link" active-class="active" @click="closeMenu">Quem Somos</RouterLink>
-        <RouterLink to="/como-funciona" class="nav-link" active-class="active" @click="closeMenu">Como Funciona</RouterLink>
-        <RouterLink to="/" class="nav-link" active-class="active" @click="closeMenu">Cartas Contempladas</RouterLink>
-        <RouterLink to="/duvidas" class="nav-link" active-class="active" @click="closeMenu">Duvidas</RouterLink>
-        <RouterLink to="/onde-encontrar" class="nav-link" active-class="active" @click="closeMenu">Onde Estamos</RouterLink>
+          <li :class="{ active: isActive('/como-funciona') }">
+            <RouterLink to="/como-funciona" @click="closeMobileMenu">
+              <i class="fa-solid fa-gears icon-menu"></i>
+              <span v-if="sidebarOpen">Como Funciona</span>
+            </RouterLink>
+          </li>
 
+          <li :class="{ active: isActive('/duvidas') }">
+            <RouterLink to="/duvidas" @click="closeMobileMenu">
+              <i class="fa-solid fa-circle-question icon-menu"></i>
+              <span v-if="sidebarOpen">Dúvidas</span>
+            </RouterLink>
+          </li>
+
+          <li :class="{ active: isActive('/onde-encontrar') }">
+            <RouterLink to="/onde-encontrar" @click="closeMobileMenu">
+              <i class="fa-solid fa-location-dot icon-menu"></i>
+              <span v-if="sidebarOpen">Onde Estamos</span>
+            </RouterLink>
+          </li>
+        </ul>
       </nav>
-    </div>
-  </header>
+
+      <button class="toggle-btn" @click="toggleSidebar">
+        <i v-if="sidebarOpen" class="fa-solid fa-chevron-left"></i>
+        <i v-else class="fa-solid fa-chevron-right"></i>
+      </button>
+    </aside>
+
+    <main class="main-content">
+      <header class="top-bar">
+        <div class="topbar-left">
+          <button class="btn-hamburguer" @click="toggleMobileMenu">
+            <i class="fa-solid fa-bars"></i>
+          </button>
+          
+          <div class="breadcrumb" v-if="!isMobileMenuOpen">
+             <span>Investimentos Inteligentes</span>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+           <a href="https://wa.me/SEUNUMERO" target="_blank" class="btn-whatsapp-desktop">
+              <i class="fa-brands fa-whatsapp"></i> Falar no WhatsApp
+           </a>
+        </div>
+      </header>
+
+      <div class="content-body">
+        <slot></slot>
+      </div>
+    </main>
+  </div>
 </template>
 
 <style scoped>
-.main-header {
-  background: white;
-  height: 90px;
-  position: sticky;
-  top: 0;
-  z-index: 1000;
-  box-shadow: 0 4px 20px -5px rgba(0,0,0,0.05);
+.dashboard-layout {
   display: flex;
-  align-items: center;
+  height: 100vh;
+  background-color: #f8fafc;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  overflow: hidden;
 }
 
-.header-container {
-  max-width: 1200px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 0 20px;
+/* Sidebar Base */
+.sidebar {
+  width: 260px;
+  background-color: #ffffff;
+  color: #4b5563;
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  transition: width 0.3s ease;
+  position: relative;
+  box-shadow: 2px 0 10px rgba(0,0,0,0.05);
+  z-index: 100;
+}
+
+.sidebar.closed {
+  width: 80px;
+}
+
+/* Cabeçalho da Sidebar */
+.sidebar-header {
+  height: 80px;
+  display: flex;
   align-items: center;
+  justify-content: center;
+  padding: 0 15px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.logo-area {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .brand-logo {
-  height: 65px;
-  width: auto;
+  height: 45px;
+  max-width: 100%;
   object-fit: contain;
 }
 
-.nav-menu {
-  display: flex;
-  gap: 30px;
+.brand-icon-collapsed {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #f7b500;
 }
 
-.nav-link {
-  text-decoration: none;
-  color: #4b5563;
-  font-weight: 600;
-  font-size: 0.95rem;
-  transition: color 0.2s;
+/* Navegação da Sidebar */
+.sidebar-nav {
+  flex: 1;
+  padding: 20px 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.sidebar-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.sidebar-nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar-nav li {
+  margin-bottom: 5px;
   position: relative;
 }
 
-.nav-link:hover, .nav-link.active { color: #F6D001; }
-
-.nav-link::after {
-  content: '';
-  position: absolute;
-  width: 0;
-  height: 3px;
-  bottom: -6px;
-  left: 0;
-  background-color: #F6D001;
-  transition: width 0.3s;
-  border-radius: 2px;
+.sidebar-nav a {
+  display: flex;
+  align-items: center;
+  padding: 14px 24px;
+  color: #4b5563;
+  text-decoration: none;
+  transition: all 0.2s;
+  font-weight: 600;
+  font-size: 0.95rem;
 }
-.nav-link:hover::after, .nav-link.active::after { width: 100%; }
+
+.sidebar-nav a:hover {
+  background-color: #fdfdfd;
+  color: #252f3f;
+}
+
+/* Estado Ativo = Amarelo da sua marca */
+.sidebar-nav li.active a {
+  color: #f7b500;
+  background-color: #fffbeb; 
+  border-right: 4px solid #f7b500;
+}
+
+/* Estilização dos ícones do FontAwesome no menu */
+.sidebar-nav a i.icon-menu {
+  font-size: 1.25rem;
+  width: 24px; /* Fixa uma largura para alinhar o texto perfeitamente */
+  text-align: center;
+  margin-right: 15px;
+  flex-shrink: 0;
+  transition: color 0.2s;
+}
+
+/* Quando ativo, muda a cor do ícone */
+.sidebar-nav li.active a i.icon-menu {
+  color: #f7b500;
+}
+
+/* Ajustes quando fechado */
+.sidebar.closed .sidebar-nav a {
+  justify-content: center;
+  padding: 14px;
+}
+.sidebar.closed .sidebar-nav a i.icon-menu {
+  margin-right: 0;
+}
+
+/* Botão de Recolher/Expandir Sidebar */
+.toggle-btn {
+  position: absolute;
+  right: -12px;
+  top: 90px;
+  background-color: #ffffff;
+  color: #4b5563;
+  border: 1px solid #e2e8f0;
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 101;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  font-size: 0.8rem; /* Tamanho do ícone menorzinho */
+}
+.toggle-btn:hover {
+  color: #F6D001;
+}
+
+/* Main Content e Topbar */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.top-bar {
+  background-color: white;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 30px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.breadcrumb {
+  color: #64748b;
+  font-weight: 500;
+}
 
 .btn-whatsapp-desktop {
   background-color: #25D366;
   color: white;
-  padding: 12px 24px;
+  padding: 10px 20px;
   border-radius: 30px;
   font-weight: 700;
   font-size: 0.9rem;
   text-decoration: none;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 8px; /* Espaço entre o ícone e texto */
   transition: all 0.2s;
 }
-
+.btn-whatsapp-desktop i {
+  font-size: 1.2rem;
+}
 .btn-whatsapp-desktop:hover {
   background-color: #1da851;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(37, 211, 102, 0.2);
 }
 
-.btn-hamburguer, .btn-close-menu, .mobile-only-cta {
-  display: none;
+.content-body {
+  padding: 30px;
 }
 
+.btn-hamburguer {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #4b5563;
+  padding: 5px;
+  font-size: 1.5rem;
+}
+
+/* Responsividade Mobile */
 @media (max-width: 1024px) {
-  .nav-menu {
-    position: fixed;
-    top: 0;
-    right: -100%;
-    width: 280px;
-    height: 100vh;
-    background: white;
-    flex-direction: column;
-    padding: 100px 30px;
-    gap: 20px;
-    box-shadow: -10px 0 30px rgba(0,0,0,0.1);
-    transition: right 0.4s ease;
-    z-index: 1001;
+  .toggle-btn {
+    display: none; 
   }
 
-  .nav-menu.is-open {
-    right: 0;
+  .sidebar {
+    position: fixed;
+    height: 100%;
+    left: -280px;
+    width: 280px !important;
+    transition: left 0.3s ease;
+  }
+
+  .sidebar.mobile-open {
+    left: 0;
   }
 
   .btn-hamburguer {
     display: block;
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: #1e3a8a;
   }
 
-  .btn-close-menu {
-    display: block;
-    position: absolute;
-    top: 30px;
-    right: 20px;
-    background: none;
-    border: none;
-    color: #64748b;
-  }
-
-  .menu-overlay {
+  .mobile-overlay {
     position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.4);
-    z-index: 1000;
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 99;
   }
+}
 
-  .btn-whatsapp-desktop {
-    display: none; 
+@media (max-width: 480px) {
+  .top-bar {
+    padding: 0 15px;
   }
-
-  .mobile-only-cta {
-    display: block;
-    margin-top: 20px;
-  }
-
-  .btn-whatsapp-mobile {
-    background-color: #25D366;
-    color: white;
+  .content-body {
     padding: 15px;
-    border-radius: 12px;
-    text-align: center;
-    text-decoration: none;
-    font-weight: 800;
-    display: block;
-  }
-
-  .nav-link {
-    font-size: 1.1rem;
-    padding: 10px 0;
-    border-bottom: 1px solid #f1f5f9;
-  }
-
-  .brand-logo {
-    height: 50px;
   }
 }
 </style>
