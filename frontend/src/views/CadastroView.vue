@@ -1,20 +1,44 @@
 <script setup>
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { reactive } from 'vue'
 
+const router = useRouter()
 const form = reactive({
+  username: '',
   name: '',
   email: '',
   password: '',
   confirmPassword: '',
 })
 
-const handleRegister = () => {
+const handleRegister = async () => {
   if (form.password !== form.confirmPassword) {
     alert("As senhas não conferem!")
     return
   }
-  console.log('Dados de Cadastro:', form)
+
+  try {
+    const response = await fetch('http://localhost:8000/api/auth/register/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: form.username,
+        email: form.email,
+        first_name: form.name,
+        password: form.password
+      })
+    })
+
+    if (response.ok) {
+      alert('Cadastro realizado! Vamos configurar seu terminal.')
+      router.push('/formulario')
+    } else {
+      const data = await response.json()
+      alert('Erro no cadastro: ' + JSON.stringify(data))
+    }
+  } catch (error) {
+    alert('Erro ao conectar com o servidor.')
+  }
 }
 </script>
 
@@ -44,48 +68,25 @@ const handleRegister = () => {
 
         <form @submit.prevent="handleRegister">
           <div class="input-group">
-            <input
-              v-model="form.name"
-              type="text"
-              placeholder="Nome completo"
-              required
-            />
+            <input v-model="form.username" type="text" placeholder="Nome de utilizador" required />
           </div>
-
           <div class="input-group">
-            <input
-              v-model="form.email"
-              type="email"
-              placeholder="seu.email@credcode.com"
-              required
-            />
+            <input v-model="form.name" type="text" placeholder="Nome completo" required />
           </div>
-
           <div class="input-group">
-            <input
-              v-model="form.password"
-              type="password"
-              placeholder="Senha do Terminal"
-              required
-            />
+            <input v-model="form.email" type="email" placeholder="seu.email@credcode.com" required />
           </div>
-
           <div class="input-group">
-            <input
-              v-model="form.confirmPassword"
-              type="password"
-              placeholder="Confirme sua senha"
-              required
-            />
+            <input v-model="form.password" type="password" placeholder="Senha do Terminal" required />
+          </div>
+          <div class="input-group">
+            <input v-model="form.confirmPassword" type="password" placeholder="Confirme sua senha" required />
           </div>
 
           <button type="submit" class="btn-login">CADASTRAR</button>
         </form>
 
-        <p class="register-link">
-          Já possui uma conta? 
-          <RouterLink to="/">Acesse aqui</RouterLink>
-        </p>
+        <p class="register-link">Já possui conta? <RouterLink to="/">Acesse aqui</RouterLink></p>
       </div>
     </div>
   </div>
@@ -102,7 +103,7 @@ const handleRegister = () => {
 
 .left-side {
   flex: 1.2;
-  background: linear-gradient(135deg, #0a2a43 0%, hwb(205 8% 64%) 100%);
+  background: linear-gradient(135deg, #0a2a43 0%, #153e5c 100%);
   display: flex;
   flex-direction: column;
   justify-content: center;

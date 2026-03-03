@@ -1,15 +1,42 @@
 <script setup>
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { reactive } from 'vue'
 
+const router = useRouter()
 const form = reactive({
-  email: '',
+  username: '',
   password: '',
   remember: false,
 })
 
-const handleLogin = () => {
-  console.log(form)
+const handleLogin = async () => {
+  try {
+    const response = await fetch('http://localhost:8000/api/auth/login/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: form.username,
+        password: form.password
+      })
+    })
+
+    const data = await response.json()
+
+    if (response.ok) {
+      localStorage.setItem('access_token', data.access)
+      localStorage.setItem('refresh_token', data.refresh)
+      
+      if (data.has_profile) {
+        router.push('/home')
+      } else {
+        router.push('/formulario')
+      }
+    } else {
+      alert('Erro ao acessar: ' + (data.detail || 'Usuário ou senha incorretos'))
+    }
+  } catch (error) {
+    alert('Erro de conexão com o terminal.')
+  }
 }
 </script>
 
@@ -40,9 +67,9 @@ const handleLogin = () => {
         <form @submit.prevent="handleLogin">
           <div class="input-group">
             <input
-              v-model="form.email"
-              type="email"
-              placeholder="seu.email@credcode.com"
+              v-model="form.username"
+              type="text"
+              placeholder="Nome de utilizador"
               required
             />
           </div>
@@ -64,12 +91,7 @@ const handleLogin = () => {
             </label>
           </div>
 
-          <RouterLink to="/formulario" class="btn-login" @click="handleLogin">
-            <button type="submit" class="btn-login">ENTRAR</button>
-          </RouterLink>
-          <RouterLink to="/home" class="btn-login" @click="handleLogin">
-            <button type="submit" class="btn-login">HOME - Verificar</button>
-          </RouterLink>
+          <button type="submit" class="btn-login">ENTRAR</button>
         </form>
 
         <p class="register-link">Ainda não tem acesso? <RouterLink to="/cadastro">Cadastre-se</RouterLink></p>
@@ -89,7 +111,7 @@ const handleLogin = () => {
 
 .left-side {
   flex: 1.2;
-  background: linear-gradient(135deg, #0a2a43 0%, hwb(205 8% 64%) 100%);
+  background: linear-gradient(135deg, #0a2a43 0%, #153e5c 100%);
   display: flex;
   flex-direction: column;
   justify-content: center;
