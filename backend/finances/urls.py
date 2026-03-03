@@ -7,5 +7,5 @@ router.register(r'wallets', WalletViewSet, basename='wallet')
 router.register(r'expenses', ExpenseViewSet, basename='expense')
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path('', include(router.urls)), # Isso vai gerar /api/finances/wallets/
 ]
