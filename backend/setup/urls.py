@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from finances.views import RegisterView # Se o RegisterView estiver no app finances
+from finances.views import RegisterView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -13,5 +13,4 @@ urlpatterns = [
 
     # Endpoints dos Apps
     path('api/finances/', include('finances.urls')),
-    path('api/core/', include('core.urls')), 
 ]

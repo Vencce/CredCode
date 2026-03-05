@@ -26,6 +26,9 @@ const handleLogin = async () => {
       localStorage.setItem('access_token', data.access)
       localStorage.setItem('refresh_token', data.refresh)
       
+      // Salva se o perfil existe para usar na verificação das rotas
+      localStorage.setItem('has_profile', data.has_profile ? 'true' : 'false')
+      
       if (data.has_profile) {
         router.push('/home')
       } else {

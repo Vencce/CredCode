@@ -3,8 +3,7 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 
 const router = useRouter();
-const currentStep = ref(1);
-const totalSteps = 3;
+const isLoading = ref(true);
 
 const userData = reactive({
   name: '',
@@ -12,18 +11,36 @@ const userData = reactive({
   account_balance: null
 });
 
-onMounted(() => {
-  const savedName = localStorage.getItem('temp_name');
-  if (savedName) userData.name = savedName;
-});
+onMounted(async () => {
+  const token = localStorage.getItem('access_token');
+  if (!token) {
+    router.push('/');
+    return;
+  }
 
-const progressPercentage = computed(() => (currentStep.value / totalSteps) * 100);
+  try {
+    // Chamada ao backend para verificar o perfil real
+    const response = await fetch('http://localhost:8000/api/finances/profile/', {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
 
-const isStepValid = computed(() => {
-  if (currentStep.value === 1) return userData.name.length > 3;
-  if (currentStep.value === 2) return userData.monthly_income !== null && userData.monthly_income >= 0;
-  if (currentStep.value === 3) return userData.account_balance !== null && userData.account_balance >= 0;
-  return false;
+    if (response.ok) {
+      const data = await response.json();
+      // Se o backend retornou dados preenchidos, vai para Home
+      if (data.full_name && data.account_balance !== undefined) {
+        router.push('/home');
+        return;
+      }
+    }
+    
+    // Se chegou aqui, é porque não tem perfil ou está incompleto
+    const savedName = localStorage.getItem('temp_name');
+    if (savedName) userData.name = savedName;
+    isLoading.value = false;
+  } catch (error) {
+    isLoading.value = false;
+  }
 });
 
 const next = () => { if (currentStep.value < totalSteps) currentStep.value++; };
@@ -51,8 +68,7 @@ const finish = async () => {
       router.push('/home');
     } else {
       const errorData = await response.json();
-      console.error('Erro backend:', errorData);
-      alert('Erro ao salvar os dados. Verifique o console.');
+      alert('Erro ao salvar os dados.');
     }
   } catch (error) {
     alert('Erro de conexão com o servidor.');
@@ -61,7 +77,7 @@ const finish = async () => {
 </script>
 
 <template>
-  <div class="onboarding-page">
+  <div v-if="!isLoading" class="onboarding-page">
     <div class="onboarding-container">
       <div class="progress-wrapper">
         <div class="progress-info">
@@ -110,24 +126,29 @@ const finish = async () => {
       </div>
     </div>
   </div>
+  <div v-else class="loading-screen">
+    <p>Verificando terminal...</p>
+  </div>
 </template>
 
 <style scoped>
 .onboarding-page { width: 100%; min-height: 100vh; display: flex; justify-content: center; align-items: center; background-color: #f4f7f9; font-family: 'Inter', sans-serif; }
 .onboarding-container { width: 100%; max-width: 550px; padding: 20px; }
-.progress-info { display: flex; justify-content: space-between; font-size: 0.85rem; color: #0a2a43; font-weight: 700; margin-bottom: 10px; }
+.progress-info { display: flex; justify-content: space-between; font-size: 0.85rem; color: #0a2a43; font-weight: 700; margin-bottom: 10px; text-transform: uppercase; }
 .progress-bar { width: 100%; height: 8px; background: #e0e6ed; border-radius: 4px; overflow: hidden; }
 .progress-fill { height: 100%; background: #f7b500; transition: width 0.4s ease; }
 .content-box { background: white; padding: 40px; border-radius: 16px; box-shadow: 0 10px 25px rgba(10, 42, 67, 0.05); }
 .step-title { color: #0a2a43; font-size: 1.8rem; font-weight: 800; margin-bottom: 8px; }
 .step-description { color: #64748b; margin-bottom: 30px; font-size: 1rem; }
-.input-group input { width: 100%; padding: 18px; border: 2px solid #e0e6ed; border-radius: 12px; font-size: 1.1rem; outline: none; }
+.input-group input { width: 100%; padding: 18px; border: 2px solid #e0e6ed; border-radius: 12px; font-size: 1.1rem; outline: none; transition: border-color 0.3s; }
 .input-group input:focus { border-color: #f7b500; }
 .action-footer { display: flex; gap: 15px; margin-top: 40px; }
-.btn-primary { flex: 2; padding: 18px; background-color: #f7b500; color: #0a2a43; border: none; border-radius: 12px; font-weight: 800; cursor: pointer; }
+.btn-primary { flex: 2; padding: 18px; background-color: #f7b500; color: #0a2a43; border: none; border-radius: 12px; font-weight: 800; font-size: 1rem; cursor: pointer; transition: all 0.3s; }
+.btn-primary:hover:not(:disabled) { background-color: #e6a800; transform: translateY(-2px); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-secondary { flex: 1; padding: 18px; border: 2px solid #e0e6ed; border-radius: 12px; background: none; color: #64748b; font-weight: 700; cursor: pointer; }
 .fade-slide-enter-active, .fade-slide-leave-active { transition: all 0.3s ease; }
 .fade-slide-enter-from { opacity: 0; transform: translateX(20px); }
 .fade-slide-leave-to { opacity: 0; transform: translateX(-20px); }
+.loading-screen { display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Inter', sans-serif; color: #0a2a43; font-weight: bold; }
 </style>

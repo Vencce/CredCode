@@ -1,26 +1,22 @@
 from rest_framework import serializers
+from .models import Profile, Wallet, Expense
 from django.contrib.auth.models import User
-from .models import Wallet, Expense, Profile
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
+
     class Meta:
         model = User
-        fields = ('username', 'email', 'password')
+        fields = ('username', 'password', 'email', 'first_name')
+
     def create(self, validated_data):
-        return User.objects.create_user(**validated_data)
-
-class ExpenseSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Expense
-        fields = ['id', 'wallet', 'description', 'amount', 'date', 'category']
-
-class WalletSerializer(serializers.ModelSerializer):
-    expenses = ExpenseSerializer(many=True, read_only=True)
-    current_balance = serializers.ReadOnlyField()
-    class Meta:
-        model = Wallet
-        fields = ['id', 'user', 'monthly_income', 'current_balance', 'expenses']
+        user = User.objects.create_user(
+            username=validated_data['username'],
+            email=validated_data.get('email', ''),
+            first_name=validated_data.get('first_name', ''),
+            password=validated_data['password']
+        )
+        return user
 
 class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
@@ -34,3 +30,13 @@ class ProfileSerializer(serializers.ModelSerializer):
             defaults=validated_data
         )
         return profile
+
+class WalletSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Wallet
+        fields = '__all__'
+
+class ExpenseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Expense
+        fields = '__all__'

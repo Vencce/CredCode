@@ -2,9 +2,11 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import generics, viewsets, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import User
 from .serializers import RegisterSerializer, WalletSerializer, ExpenseSerializer, ProfileSerializer
-from .models import Wallet, Expense
+from .models import Wallet, Expense, Profile
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -32,3 +34,23 @@ class ProfileView(APIView):
             serializer.save()
             return Response({"message": "Perfil atualizado com sucesso!", "has_profile": True}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class CustomTokenSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        # Verifica se existe um perfil vinculado a este usuário
+        data['has_profile'] = Profile.objects.filter(user=self.user).exists()
+        return data
+
+class CustomLoginView(TokenObtainPairView):
+    serializer_class = CustomTokenSerializer
+
+def get(self, request):
+    profile_exists = Profile.objects.filter(user=request.user).exists()
+    if profile_exists:
+        profile = Profile.objects.get(user=request.user)
+        return Response({
+            "full_name": profile.full_name,
+            "has_profile": True
+        }, status=status.HTTP_200_OK)
+    return Response({"has_profile": False}, status=status.HTTP_404_NOT_FOUND)
