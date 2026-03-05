@@ -12,11 +12,13 @@ const router = createRouter({
       path: '/home',
       name: 'home',
       component: () => import('../views/HomeView.vue'),
+      meta: { requiresAuth: true }
     },
     {
       path: '/formulario',
       name: 'formulario',
       component: () => import('../views/OnboardingView.vue'),
+      meta: { requiresAuth: true }
     },
     {
       path: '/cadastro',
@@ -24,6 +26,18 @@ const router = createRouter({
       component: () => import('../views/CadastroView.vue'),
     }
   ],
+})
+
+router.beforeEach((to, from, next) => {
+  const isAuthenticated = localStorage.getItem('access_token')
+
+  if (to.meta.requiresAuth && !isAuthenticated) {
+    next({ name: 'login' })
+  } else if ((to.name === 'login' || to.name === 'cadastro') && isAuthenticated) {
+    next({ name: 'home' })
+  } else {
+    next()
+  } 
 })
 
 export default router

@@ -1,6 +1,7 @@
 <script setup>
 import { RouterLink, useRouter } from 'vue-router'
 import { reactive } from 'vue'
+import ToastMessage from '../components/ToastMessage.vue'
 
 const router = useRouter()
 const form = reactive({
@@ -8,6 +9,18 @@ const form = reactive({
   password: '',
   remember: false,
 })
+
+const toast = reactive({
+  show: false,
+  message: '',
+  type: 'error'
+})
+
+const showToast = (message, type = 'error') => {
+  toast.message = message
+  toast.type = type
+  toast.show = true
+}
 
 const handleLogin = async () => {
   try {
@@ -26,7 +39,6 @@ const handleLogin = async () => {
       localStorage.setItem('access_token', data.access)
       localStorage.setItem('refresh_token', data.refresh)
       
-      // Salva se o perfil existe para usar na verificação das rotas
       localStorage.setItem('has_profile', data.has_profile ? 'true' : 'false')
       
       if (data.has_profile) {
@@ -35,16 +47,18 @@ const handleLogin = async () => {
         router.push('/formulario')
       }
     } else {
-      alert('Erro ao acessar: ' + (data.detail || 'Usuário ou senha incorretos'))
+      showToast(data.detail || 'Usuário ou senha incorretos', 'error')
     }
   } catch (error) {
-    alert('Erro de conexão com o terminal.')
+    showToast('Erro de conexão com o terminal.', 'error')
   }
 }
 </script>
 
 <template>
   <div class="page-wrapper">
+    <ToastMessage v-model:show="toast.show" :message="toast.message" :type="toast.type" />
+    
     <div class="left-side">
       <div class="overlay-content">
         <img src="../components/imagens/logo_cortada.png" alt="CREDCODE Logo" class="hero-logo" />

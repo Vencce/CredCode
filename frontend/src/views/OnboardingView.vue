@@ -1,14 +1,41 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import ToastMessage from '../components/ToastMessage.vue';
 
 const router = useRouter();
 const isLoading = ref(true);
+
+const currentStep = ref(1);
+const totalSteps = 3;
 
 const userData = reactive({
   name: '',
   monthly_income: null,
   account_balance: null
+});
+
+const toast = reactive({
+  show: false,
+  message: '',
+  type: 'error'
+});
+
+const showToast = (message, type = 'error') => {
+  toast.message = message;
+  toast.type = type;
+  toast.show = true;
+};
+
+const progressPercentage = computed(() => {
+  return (currentStep.value / totalSteps) * 100;
+});
+
+const isStepValid = computed(() => {
+  if (currentStep.value === 1) return userData.name.trim() !== '';
+  if (currentStep.value === 2) return userData.monthly_income !== null && userData.monthly_income !== '';
+  if (currentStep.value === 3) return userData.account_balance !== null && userData.account_balance !== '';
+  return false;
 });
 
 onMounted(async () => {
@@ -19,7 +46,6 @@ onMounted(async () => {
   }
 
   try {
-    // Chamada ao backend para verificar o perfil real
     const response = await fetch('http://localhost:8000/api/finances/profile/', {
       method: 'GET',
       headers: { 'Authorization': `Bearer ${token}` }
@@ -27,14 +53,12 @@ onMounted(async () => {
 
     if (response.ok) {
       const data = await response.json();
-      // Se o backend retornou dados preenchidos, vai para Home
-      if (data.full_name && data.account_balance !== undefined) {
+      if (data.has_profile) {
         router.push('/home');
         return;
       }
     }
     
-    // Se chegou aqui, é porque não tem perfil ou está incompleto
     const savedName = localStorage.getItem('temp_name');
     if (savedName) userData.name = savedName;
     isLoading.value = false;
@@ -64,20 +88,23 @@ const finish = async () => {
 
     if (response.ok) {
       localStorage.removeItem('temp_name');
-      alert('Terminal configurado com sucesso!');
-      router.push('/home');
+      showToast('Terminal configurado com sucesso!', 'success');
+      setTimeout(() => {
+        router.push('/home');
+      }, 1500);
     } else {
-      const errorData = await response.json();
-      alert('Erro ao salvar os dados.');
+      showToast('Erro ao salvar os dados.', 'error');
     }
   } catch (error) {
-    alert('Erro de conexão com o servidor.');
+    showToast('Erro de conexão com o servidor.', 'error');
   }
 };
 </script>
 
 <template>
   <div v-if="!isLoading" class="onboarding-page">
+    <ToastMessage v-model:show="toast.show" :message="toast.message" :type="toast.type" />
+    
     <div class="onboarding-container">
       <div class="progress-wrapper">
         <div class="progress-info">

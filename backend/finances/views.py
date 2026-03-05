@@ -16,17 +16,30 @@ class RegisterView(generics.CreateAPIView):
 class WalletViewSet(viewsets.ModelViewSet):
     serializer_class = WalletSerializer
     permission_classes = [IsAuthenticated]
+    
     def get_queryset(self):
         return Wallet.objects.filter(user=self.request.user)
 
 class ExpenseViewSet(viewsets.ModelViewSet):
     serializer_class = ExpenseSerializer
     permission_classes = [IsAuthenticated]
+    
     def get_queryset(self):
         return Expense.objects.filter(wallet__user=self.request.user)
 
 class ProfileView(APIView):
     permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile_exists = Profile.objects.filter(user=request.user).exists()
+        if profile_exists:
+            profile = Profile.objects.get(user=request.user)
+            return Response({
+                "full_name": profile.full_name,
+                "account_balance": getattr(profile, 'account_balance', 0),
+                "has_profile": True
+            }, status=status.HTTP_200_OK)
+        return Response({"has_profile": False}, status=status.HTTP_404_NOT_FOUND)
 
     def post(self, request):
         serializer = ProfileSerializer(data=request.data, context={'request': request})
@@ -38,19 +51,8 @@ class ProfileView(APIView):
 class CustomTokenSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
-        # Verifica se existe um perfil vinculado a este usuário
         data['has_profile'] = Profile.objects.filter(user=self.user).exists()
         return data
 
 class CustomLoginView(TokenObtainPairView):
     serializer_class = CustomTokenSerializer
-
-def get(self, request):
-    profile_exists = Profile.objects.filter(user=request.user).exists()
-    if profile_exists:
-        profile = Profile.objects.get(user=request.user)
-        return Response({
-            "full_name": profile.full_name,
-            "has_profile": True
-        }, status=status.HTTP_200_OK)
-    return Response({"has_profile": False}, status=status.HTTP_404_NOT_FOUND)
