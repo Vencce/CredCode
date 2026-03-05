@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Wallet, Expense
+from .models import Wallet, Expense, Profile
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -21,3 +21,16 @@ class WalletSerializer(serializers.ModelSerializer):
     class Meta:
         model = Wallet
         fields = ['id', 'user', 'monthly_income', 'current_balance', 'expenses']
+
+class ProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Profile
+        fields = ['full_name', 'monthly_income', 'account_balance']
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+        profile, created = Profile.objects.update_or_create(
+            user=user,
+            defaults=validated_data
+        )
+        return profile
