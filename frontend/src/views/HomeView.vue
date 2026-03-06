@@ -1,8 +1,9 @@
 <script setup>
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import ToastMessage from '../components/ToastMessage.vue'
 import SideLayout from '../components/SideLayout.vue'
+import FooterComp from '../components/FooterComp.vue'
 
 const router = useRouter()
 const isAuthorized = ref(false)
@@ -20,11 +21,23 @@ const userData = reactive({
   expenses: 0
 })
 
-const recentTransactions = ref([
-  { id: 1, description: 'Salário', amount: 5000, type: 'income', date: '05/03/2026' },
-  { id: 2, description: 'Aluguel', amount: -1500, type: 'expense', date: '06/03/2026' },
-  { id: 3, description: 'Mercado', amount: -450, type: 'expense', date: '08/03/2026' }
-])
+const recentTransactions = ref([])
+const defaultWalletId = ref(null)
+
+const showModal = ref(false)
+const modalType = ref('expense')
+
+const predefinedCategories = {
+  income: ['Salário', 'Investimentos', 'Vendas', 'Serviços', 'Outros'],
+  expense: ['Alimentação', 'Transporte', 'Moradia', 'Contas', 'Saúde', 'Lazer', 'Outros']
+}
+
+const form = reactive({
+  description: '',
+  amount: '',
+  date: new Date().toISOString().split('T')[0],
+  category: ''
+})
 
 const showToast = (message, type = 'error') => {
   toast.message = message
@@ -32,20 +45,86 @@ const showToast = (message, type = 'error') => {
   toast.show = true
 }
 
-const loadUserProfile = async (token) => {
+const loadData = async (token) => {
   try {
-    const response = await fetch('http://localhost:8000/api/finances/profile/', {
+    let baseBalance = 0
+    
+    const profileRes = await fetch('http://localhost:8000/api/finances/profile/', {
       method: 'GET',
       headers: { 'Authorization': `Bearer ${token}` }
     })
     
-    if (response.ok) {
-      const data = await response.json()
+    if (profileRes.ok) {
+      const data = await profileRes.json()
       if (data.full_name) userData.name = data.full_name
-      if (data.account_balance !== undefined) userData.balance = data.account_balance
+      if (data.account_balance !== undefined && data.account_balance !== null) {
+        baseBalance = parseFloat(data.account_balance) || 0
+      }
     }
+
+    const walletRes = await fetch('http://localhost:8000/api/finances/wallets/', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    
+    if (walletRes.ok) {
+      const wallets = await walletRes.json()
+      if (wallets.length > 0) {
+        defaultWalletId.value = wallets[0].id
+        if (baseBalance === 0 && wallets[0].balance !== undefined && wallets[0].balance !== null) {
+          baseBalance = parseFloat(wallets[0].balance) || 0
+        }
+      } else {
+        const createWalletRes = await fetch('http://localhost:8000/api/finances/wallets/', {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ name: 'Carteira Principal', balance: baseBalance })
+        })
+        if (createWalletRes.ok) {
+          const newWallet = await createWalletRes.json()
+          defaultWalletId.value = newWallet.id
+        }
+      }
+    }
+
+    userData.balance = baseBalance
+
+    const expensesRes = await fetch('http://localhost:8000/api/finances/expenses/', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+
+    if (expensesRes.ok) {
+      const expenses = await expensesRes.json()
+      
+      let totalInc = 0
+      let totalExp = 0
+
+      recentTransactions.value = expenses.map(item => {
+        const val = parseFloat(item.amount || item.value || 0)
+        if (val >= 0) totalInc += val
+        else totalExp += Math.abs(val)
+
+        const dateVal = item.date || item.created_at || ''
+        const dateParts = dateVal.split('-')
+        const formattedDate = dateParts.length === 3 ? `${dateParts[2].substring(0,2)}/${dateParts[1]}/${dateParts[0]}` : dateVal
+
+        return {
+          id: item.id,
+          description: item.description || item.title || item.name || 'Sem descrição',
+          amount: val,
+          type: val >= 0 ? 'income' : 'expense',
+          date: formattedDate
+        }
+      }).reverse()
+
+      userData.income = totalInc
+      userData.expenses = totalExp
+    }
+
   } catch (error) {
-    showToast('Erro ao carregar dados do perfil.', 'error')
+    showToast('Erro ao sincronizar dados com o terminal.', 'error')
   }
 }
 
@@ -59,7 +138,7 @@ onMounted(() => {
     }, 1500)
   } else {
     isAuthorized.value = true
-    loadUserProfile(token)
+    loadData(token)
   }
 })
 
@@ -70,17 +149,76 @@ const handleLogout = () => {
   router.push('/')
 }
 
-const handleAddIncome = () => {
-  showToast('Módulo de entrada em desenvolvimento', 'success')
+const openModal = (type) => {
+  modalType.value = type
+  form.description = ''
+  form.amount = ''
+  form.category = ''
+  form.date = new Date().toISOString().split('T')[0]
+  showModal.value = true
 }
 
-const handleAddExpense = () => {
-  showToast('Módulo de gastos em desenvolvimento', 'error')
+const closeModal = () => {
+  showModal.value = false
+}
+
+const saveTransaction = async () => {
+  if (!form.description || !form.amount || !form.date || !form.category) {
+    showToast('Preencha todos os campos obrigatórios', 'error')
+    return
+  }
+
+  if (!defaultWalletId.value) {
+    showToast('Carteira não encontrada. Recarregue a página.', 'error')
+    return
+  }
+
+  const token = localStorage.getItem('access_token')
+  let finalAmount = parseFloat(form.amount)
+  
+  if (modalType.value === 'expense') {
+    finalAmount = -Math.abs(finalAmount)
+  } else {
+    finalAmount = Math.abs(finalAmount)
+  }
+
+  const payload = {
+    wallet: defaultWalletId.value,
+    description: `[${form.category}] ${form.description}`,
+    amount: finalAmount,
+    date: form.date
+  }
+
+  try {
+    const response = await fetch('http://localhost:8000/api/finances/expenses/', {
+      method: 'POST',
+      headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+
+    if (response.ok) {
+      showToast('Transação registrada com sucesso!', 'success')
+      closeModal()
+      loadData(token)
+    } else {
+      showToast('Erro ao salvar os dados da transação.', 'error')
+    }
+  } catch (error) {
+    showToast('Erro de conexão com o terminal.', 'error')
+  }
 }
 
 const formatCurrency = (value) => {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
+  const numValue = parseFloat(value) || 0
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValue)
 }
+
+const currentCategories = computed(() => {
+  return modalType.value === 'income' ? predefinedCategories.income : predefinedCategories.expense
+})
 </script>
 
 <template>
@@ -98,7 +236,7 @@ const formatCurrency = (value) => {
     <section class="summary-cards">
       <div class="card balance-card">
         <h3>Saldo Atual</h3>
-        <p class="amount">{{ formatCurrency(userData.balance) }}</p>
+        <p class="amount">{{ formatCurrency(userData.balance + userData.income - userData.expenses) }}</p>
       </div>
       <div class="card income-card">
         <h3>Entradas do Mês</h3>
@@ -111,10 +249,10 @@ const formatCurrency = (value) => {
     </section>
 
     <section class="action-panel">
-      <button @click="handleAddIncome" class="action-btn btn-income">
+      <button @click="openModal('income')" class="action-btn btn-income">
         <span class="btn-icon">+</span> Nova Entrada
       </button>
-      <button @click="handleAddExpense" class="action-btn btn-expense">
+      <button @click="openModal('expense')" class="action-btn btn-expense">
         <span class="btn-icon">-</span> Novo Gasto
       </button>
     </section>
@@ -132,16 +270,19 @@ const formatCurrency = (value) => {
             </tr>
           </thead>
           <tbody>
+            <tr v-if="recentTransactions.length === 0">
+              <td colspan="4" class="empty-state">Nenhuma transação registrada.</td>
+            </tr>
             <tr v-for="item in recentTransactions" :key="item.id">
               <td>{{ item.date }}</td>
-              <td>{{ item.description }}</td>
+              <td class="fw-600">{{ item.description }}</td>
               <td>
                 <span :class="['type-badge', item.type]">
                   {{ item.type === 'income' ? 'Entrada' : 'Saída' }}
                 </span>
               </td>
-              <td :class="['align-right', item.type === 'income' ? 'text-positive' : 'text-negative']">
-                {{ formatCurrency(item.amount) }}
+              <td :class="['align-right fw-700', item.type === 'income' ? 'text-positive' : 'text-negative']">
+                {{ formatCurrency(Math.abs(item.amount)) }}
               </td>
             </tr>
           </tbody>
@@ -149,9 +290,50 @@ const formatCurrency = (value) => {
       </div>
     </section>
 
-    <footer class="app-footer">
-      <p>&copy; 2026 CREDCODE. O Caminho da Lógica. Todos os direitos reservados.</p>
-    </footer>
+    <FooterComp />
+
+    <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
+      <div class="modal-container">
+        <div class="modal-header">
+          <h2>{{ modalType === 'income' ? 'Nova Entrada' : 'Novo Gasto' }}</h2>
+          <button class="close-btn" @click="closeModal">&times;</button>
+        </div>
+        
+        <form @submit.prevent="saveTransaction" class="modal-form">
+          <div class="form-group">
+            <label>Descrição</label>
+            <input v-model="form.description" type="text" placeholder="Ex: Conta de Luz" required />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Valor (R$)</label>
+              <input v-model="form.amount" type="number" step="0.01" min="0.01" placeholder="0.00" required />
+            </div>
+            
+            <div class="form-group">
+              <label>Data</label>
+              <input v-model="form.date" type="date" required />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Categoria</label>
+            <select v-model="form.category" required>
+              <option value="" disabled>Selecione uma categoria</option>
+              <option v-for="cat in currentCategories" :key="cat" :value="cat">{{ cat }}</option>
+            </select>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn-cancel" @click="closeModal">Cancelar</button>
+            <button type="submit" :class="['btn-save', modalType === 'income' ? 'bg-positive' : 'bg-negative']">
+              Salvar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </SideLayout>
 </template>
 
@@ -295,15 +477,17 @@ const formatCurrency = (value) => {
   padding: 20px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
   border: 1px solid #f1f5f9;
+  overflow-x: auto;
 }
 
 .transaction-table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 600px;
 }
 
 .transaction-table th, .transaction-table td {
-  padding: 15px;
+  padding: 16px 15px;
   text-align: left;
   border-bottom: 1px solid #f1f5f9;
 }
@@ -311,32 +495,38 @@ const formatCurrency = (value) => {
 .transaction-table th {
   color: #64748b;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   text-transform: uppercase;
+  background-color: #f8fafc;
 }
+
+.transaction-table th:first-child { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+.transaction-table th:last-child { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
 
 .transaction-table td {
   color: #334155;
-  font-weight: 500;
+  font-size: 0.95rem;
 }
 
 .transaction-table tr:last-child td {
   border-bottom: none;
 }
 
-.align-right {
-  text-align: right !important;
+.transaction-table tr:hover td {
+  background-color: #f8fafc;
 }
 
-.text-positive {
-  color: #10b981;
-  font-weight: 700 !important;
+.empty-state {
+  text-align: center !important;
+  padding: 30px !important;
+  color: #94a3b8 !important;
 }
 
-.text-negative {
-  color: #ef4444;
-  font-weight: 700 !important;
-}
+.align-right { text-align: right !important; }
+.fw-600 { font-weight: 600; }
+.fw-700 { font-weight: 700; }
+.text-positive { color: #10b981 !important; }
+.text-negative { color: #ef4444 !important; }
 
 .type-badge {
   padding: 6px 12px;
@@ -355,14 +545,135 @@ const formatCurrency = (value) => {
   color: #991b1b;
 }
 
-.app-footer {
-  margin-top: 40px;
-  padding-top: 20px;
-  border-top: 1px solid #e2e8f0;
-  text-align: center;
-  color: #64748b;
-  font-size: 0.85rem;
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(10, 42, 67, 0.6);
+  backdrop-filter: blur(3px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
 }
+
+.modal-container {
+  background: white;
+  width: 100%;
+  max-width: 450px;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  padding: 30px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: #0a2a43;
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.8rem;
+  color: #64748b;
+  cursor: pointer;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.close-btn:hover {
+  color: #ef4444;
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.form-row {
+  display: flex;
+  gap: 15px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.form-group label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.form-group input, .form-group select {
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-family: 'Inter', sans-serif;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.form-group input:focus, .form-group select:focus {
+  border-color: #f7b500;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.btn-cancel {
+  flex: 1;
+  padding: 14px;
+  background-color: #f1f5f9;
+  color: #64748b;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-cancel:hover {
+  background-color: #e2e8f0;
+}
+
+.btn-save {
+  flex: 1;
+  padding: 14px;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.btn-save:hover {
+  transform: translateY(-2px);
+  opacity: 0.9;
+}
+
+.bg-positive { background-color: #10b981; }
+.bg-negative { background-color: #ef4444; }
 
 @media (max-width: 768px) {
   .dashboard-header {
@@ -377,6 +688,10 @@ const formatCurrency = (value) => {
   
   .action-btn {
     max-width: 100%;
+  }
+  
+  .form-row {
+    flex-direction: column;
   }
 }
 </style>

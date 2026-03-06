@@ -19,6 +19,9 @@ class WalletViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         return Wallet.objects.filter(user=self.request.user)
+        
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
 class ExpenseViewSet(viewsets.ModelViewSet):
     serializer_class = ExpenseSerializer
@@ -37,6 +40,7 @@ class ProfileView(APIView):
             return Response({
                 "full_name": profile.full_name,
                 "account_balance": getattr(profile, 'account_balance', 0),
+                "monthly_income": getattr(profile, 'monthly_income', 0),
                 "has_profile": True
             }, status=status.HTTP_200_OK)
         return Response({"has_profile": False}, status=status.HTTP_404_NOT_FOUND)

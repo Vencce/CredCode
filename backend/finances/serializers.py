@@ -35,6 +35,7 @@ class WalletSerializer(serializers.ModelSerializer):
     class Meta:
         model = Wallet
         fields = '__all__'
+        read_only_fields = ['user']
 
 class ExpenseSerializer(serializers.ModelSerializer):
     class Meta:

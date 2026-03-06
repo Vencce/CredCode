@@ -24,6 +24,12 @@ const router = createRouter({
       path: '/cadastro',
       name: 'cadastro',
       component: () => import('../views/CadastroView.vue'),
+    },
+    {
+      path: '/transacoes',
+      name: 'transacoes',
+      component: () => import('../views/TransacoesView.vue'),
+      meta: { requiresAuth: true }
     }
   ],
 })
