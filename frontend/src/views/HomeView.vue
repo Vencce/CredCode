@@ -142,13 +142,6 @@ onMounted(() => {
   }
 })
 
-const handleLogout = () => {
-  localStorage.removeItem('access_token')
-  localStorage.removeItem('refresh_token')
-  localStorage.removeItem('has_profile')
-  router.push('/')
-}
-
 const openModal = (type) => {
   modalType.value = type
   form.description = ''
@@ -227,24 +220,42 @@ const currentCategories = computed(() => {
   <SideLayout v-if="isAuthorized">
     <div class="dashboard-header">
       <div class="header-greeting">
-        <h1>Olá, {{ userData.name }}</h1>
-        <p>Bem-vindo ao seu Terminal Financeiro</p>
+        <h1>Dashboard Financeiro</h1>
+        <p>Acompanhe e gerencie seu patrimônio</p>
       </div>
-      <button @click="handleLogout" class="btn-logout">Sair do Terminal</button>
+    </div>
+
+    <div class="main-balance-container">
+      <div class="balance-card-primary">
+        <div class="balance-info">
+          <h3>Saldo Atual</h3>
+          <p class="amount-huge">{{ formatCurrency(userData.balance + userData.income - userData.expenses) }}</p>
+        </div>
+        <div class="balance-decoration">
+          <div class="circle circle-1"></div>
+          <div class="circle circle-2"></div>
+        </div>
+      </div>
     </div>
     
     <section class="summary-cards">
-      <div class="card balance-card">
-        <h3>Saldo Atual</h3>
-        <p class="amount">{{ formatCurrency(userData.balance + userData.income - userData.expenses) }}</p>
-      </div>
       <div class="card income-card">
-        <h3>Entradas do Mês</h3>
-        <p class="amount positive">{{ formatCurrency(userData.income) }}</p>
+        <div class="card-icon-wrapper positive-bg">
+          <span class="card-icon">↗</span>
+        </div>
+        <div class="card-data">
+          <h3>Entradas do Mês</h3>
+          <p class="amount positive">{{ formatCurrency(userData.income) }}</p>
+        </div>
       </div>
       <div class="card expense-card">
-        <h3>Saídas do Mês</h3>
-        <p class="amount negative">{{ formatCurrency(userData.expenses) }}</p>
+        <div class="card-icon-wrapper negative-bg">
+          <span class="card-icon">↘</span>
+        </div>
+        <div class="card-data">
+          <h3>Saídas do Mês</h3>
+          <p class="amount negative">{{ formatCurrency(userData.expenses) }}</p>
+        </div>
       </div>
     </section>
 
@@ -258,7 +269,9 @@ const currentCategories = computed(() => {
     </section>
 
     <section class="recent-transactions">
-      <h2>Transações Recentes</h2>
+      <div class="section-title-wrapper">
+        <h2>Transações Recentes</h2>
+      </div>
       <div class="table-container">
         <table class="transaction-table">
           <thead>
@@ -274,15 +287,15 @@ const currentCategories = computed(() => {
               <td colspan="4" class="empty-state">Nenhuma transação registrada.</td>
             </tr>
             <tr v-for="item in recentTransactions" :key="item.id">
-              <td>{{ item.date }}</td>
-              <td class="fw-600">{{ item.description }}</td>
+              <td class="td-date">{{ item.date }}</td>
+              <td class="fw-600 td-desc">{{ item.description }}</td>
               <td>
                 <span :class="['type-badge', item.type]">
                   {{ item.type === 'income' ? 'Entrada' : 'Saída' }}
                 </span>
               </td>
               <td :class="['align-right fw-700', item.type === 'income' ? 'text-positive' : 'text-negative']">
-                {{ formatCurrency(Math.abs(item.amount)) }}
+                {{ item.type === 'income' ? '+' : '-' }} {{ formatCurrency(Math.abs(item.amount)) }}
               </td>
             </tr>
           </tbody>
@@ -342,121 +355,208 @@ const currentCategories = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
+  margin-bottom: 25px;
 }
 
 .header-greeting h1 {
-  color: #0a2a43;
-  font-size: 1.8rem;
+  color: #0f172a;
+  font-size: 2rem;
   font-weight: 800;
-  margin: 0 0 5px 0;
+  margin: 0 0 4px 0;
+  letter-spacing: -0.5px;
 }
 
 .header-greeting p {
   color: #64748b;
   margin: 0;
-  font-size: 1rem;
+  font-size: 1.05rem;
 }
 
-.btn-logout {
-  background-color: #f8fafc;
-  color: #0a2a43;
-  border: 1px solid #e2e8f0;
-  padding: 10px 20px;
-  border-radius: 8px;
-  cursor: pointer;
+.main-balance-container {
+  margin-bottom: 30px;
+}
+
+.balance-card-primary {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: white;
+  padding: 45px 40px;
+  border-radius: 24px;
+  box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.2), 0 8px 10px -6px rgba(15, 23, 42, 0.1);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.balance-info {
+  position: relative;
+  z-index: 2;
+}
+
+.balance-card-primary h3 {
+  color: #94a3b8;
+  font-size: 1.1rem;
   font-weight: 600;
-  transition: all 0.3s;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin: 0 0 12px 0;
 }
 
-.btn-logout:hover {
-  background-color: #fee2e2;
-  color: #ef4444;
-  border-color: #fca5a5;
+.amount-huge {
+  font-size: 3.5rem;
+  font-weight: 900;
+  margin: 0;
+  color: #f7b500;
+  letter-spacing: -1.5px;
+  text-shadow: 0 2px 10px rgba(247, 181, 0, 0.2);
+}
+
+.balance-decoration {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.circle {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.circle-1 {
+  width: 300px;
+  height: 300px;
+  top: -100px;
+  right: -50px;
+}
+
+.circle-2 {
+  width: 200px;
+  height: 200px;
+  bottom: -80px;
+  right: 150px;
 }
 
 .summary-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 25px;
-  margin-bottom: 40px;
+  margin-bottom: 35px;
 }
 
 .card {
   background: white;
-  padding: 25px;
-  border-radius: 16px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+  padding: 25px 30px;
+  border-radius: 20px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -4px rgba(0, 0, 0, 0.02);
   border: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.card h3 {
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+}
+
+.card-icon-wrapper {
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.positive-bg {
+  background-color: #ecfdf5;
+  color: #10b981;
+}
+
+.negative-bg {
+  background-color: #fef2f2;
+  color: #ef4444;
+}
+
+.card-icon {
+  font-size: 1.8rem;
+  font-weight: 900;
+}
+
+.card-data h3 {
   color: #64748b;
   font-size: 0.95rem;
   font-weight: 600;
   text-transform: uppercase;
-  margin: 0 0 15px 0;
+  letter-spacing: 0.5px;
+  margin: 0 0 8px 0;
 }
 
 .amount {
-  font-size: 2rem;
+  font-size: 1.8rem;
   font-weight: 800;
-  color: #0a2a43;
   margin: 0;
+  letter-spacing: -0.5px;
 }
 
 .positive {
-  color: #10b981;
+  color: #059669;
 }
 
 .negative {
-  color: #ef4444;
+  color: #dc2626;
 }
 
 .action-panel {
   display: flex;
   gap: 20px;
-  margin-bottom: 40px;
+  margin-bottom: 45px;
 }
 
 .action-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 16px 30px;
-  border-radius: 12px;
+  gap: 12px;
+  padding: 18px 35px;
+  border-radius: 16px;
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 1.05rem;
   cursor: pointer;
   border: none;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   flex: 1;
-  max-width: 250px;
-}
-
-.action-btn:hover {
-  transform: translateY(-2px);
+  max-width: 280px;
 }
 
 .btn-income {
-  background-color: #10b981;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: white;
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3);
 }
 
 .btn-income:hover {
-  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+  transform: translateY(-3px);
+  box-shadow: 0 15px 25px -5px rgba(16, 185, 129, 0.4);
 }
 
 .btn-expense {
-  background-color: #ef4444;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: white;
-  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.3);
+  box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3);
 }
 
 .btn-expense:hover {
-  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+  transform: translateY(-3px);
+  box-shadow: 0 15px 25px -5px rgba(239, 68, 68, 0.4);
 }
 
 .btn-icon {
@@ -464,30 +564,37 @@ const currentCategories = computed(() => {
   font-weight: 900;
 }
 
-.recent-transactions h2 {
-  color: #0a2a43;
-  font-size: 1.2rem;
-  font-weight: 800;
+.section-title-wrapper {
   margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #f1f5f9;
+}
+
+.recent-transactions h2 {
+  color: #0f172a;
+  font-size: 1.4rem;
+  font-weight: 800;
+  margin: 0;
 }
 
 .table-container {
   background: white;
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+  border-radius: 20px;
+  padding: 10px 25px 25px 25px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.02), 0 4px 6px -4px rgba(0, 0, 0, 0.01);
   border: 1px solid #f1f5f9;
   overflow-x: auto;
 }
 
 .transaction-table {
   width: 100%;
-  border-collapse: collapse;
-  min-width: 600px;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 700px;
 }
 
 .transaction-table th, .transaction-table td {
-  padding: 16px 15px;
+  padding: 18px 15px;
   text-align: left;
   border-bottom: 1px solid #f1f5f9;
 }
@@ -497,52 +604,64 @@ const currentCategories = computed(() => {
   font-weight: 600;
   font-size: 0.85rem;
   text-transform: uppercase;
-  background-color: #f8fafc;
+  letter-spacing: 0.5px;
+  padding-top: 25px;
 }
-
-.transaction-table th:first-child { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
-.transaction-table th:last-child { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
 
 .transaction-table td {
   color: #334155;
-  font-size: 0.95rem;
+  font-size: 1rem;
 }
 
 .transaction-table tr:last-child td {
   border-bottom: none;
 }
 
+.transaction-table tr {
+  transition: background-color 0.2s;
+}
+
 .transaction-table tr:hover td {
   background-color: #f8fafc;
 }
 
+.td-date {
+  color: #64748b !important;
+  font-size: 0.95rem !important;
+}
+
+.td-desc {
+  color: #0f172a !important;
+}
+
 .empty-state {
   text-align: center !important;
-  padding: 30px !important;
+  padding: 50px !important;
   color: #94a3b8 !important;
+  font-weight: 500;
 }
 
 .align-right { text-align: right !important; }
 .fw-600 { font-weight: 600; }
 .fw-700 { font-weight: 700; }
-.text-positive { color: #10b981 !important; }
-.text-negative { color: #ef4444 !important; }
+.text-positive { color: #059669 !important; }
+.text-negative { color: #dc2626 !important; }
 
 .type-badge {
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 0.8rem;
+  padding: 8px 14px;
+  border-radius: 12px;
+  font-size: 0.85rem;
   font-weight: 600;
 }
 
 .type-badge.income {
-  background-color: #d1fae5;
-  color: #065f46;
+  background-color: #ecfdf5;
+  color: #059669;
 }
 
 .type-badge.expense {
-  background-color: #fee2e2;
-  color: #991b1b;
+  background-color: #fef2f2;
+  color: #dc2626;
 }
 
 .modal-overlay {
@@ -551,8 +670,8 @@ const currentCategories = computed(() => {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(10, 42, 67, 0.6);
-  backdrop-filter: blur(3px);
+  background-color: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(5px);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -562,92 +681,110 @@ const currentCategories = computed(() => {
 .modal-container {
   background: white;
   width: 100%;
-  max-width: 450px;
-  border-radius: 16px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
-  padding: 30px;
+  max-width: 480px;
+  border-radius: 24px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  padding: 35px;
+  transform: translateY(0);
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 25px;
+  margin-bottom: 30px;
 }
 
 .modal-header h2 {
   margin: 0;
-  color: #0a2a43;
-  font-size: 1.4rem;
+  color: #0f172a;
+  font-size: 1.5rem;
   font-weight: 800;
 }
 
 .close-btn {
-  background: none;
+  background: #f1f5f9;
   border: none;
-  font-size: 1.8rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 1.2rem;
   color: #64748b;
   cursor: pointer;
-  line-height: 1;
-  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
 }
 
 .close-btn:hover {
-  color: #ef4444;
+  background: #e2e8f0;
+  color: #0f172a;
 }
 
 .modal-form {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 20px;
 }
 
 .form-row {
   display: flex;
-  gap: 15px;
+  gap: 20px;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   flex: 1;
 }
 
 .form-group label {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: 600;
-  color: #334155;
+  color: #475569;
 }
 
 .form-group input, .form-group select {
-  padding: 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 0.95rem;
+  padding: 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  font-size: 1rem;
   font-family: 'Inter', sans-serif;
   outline: none;
-  transition: border-color 0.3s;
+  transition: border-color 0.3s, box-shadow 0.3s;
+  background-color: #f8fafc;
+  color: #0f172a;
 }
 
 .form-group input:focus, .form-group select:focus {
   border-color: #f7b500;
+  background-color: white;
+  box-shadow: 0 0 0 4px rgba(247, 181, 0, 0.1);
 }
 
 .modal-actions {
   display: flex;
   gap: 15px;
-  margin-top: 20px;
+  margin-top: 25px;
 }
 
 .btn-cancel {
   flex: 1;
-  padding: 14px;
+  padding: 16px;
   background-color: #f1f5f9;
-  color: #64748b;
+  color: #475569;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   font-weight: 700;
+  font-size: 1rem;
   cursor: pointer;
   transition: background-color 0.2s;
 }
@@ -658,28 +795,42 @@ const currentCategories = computed(() => {
 
 .btn-save {
   flex: 1;
-  padding: 14px;
+  padding: 16px;
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   font-weight: 700;
+  font-size: 1rem;
   cursor: pointer;
-  transition: transform 0.2s, opacity 0.2s;
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .btn-save:hover {
   transform: translateY(-2px);
-  opacity: 0.9;
 }
 
-.bg-positive { background-color: #10b981; }
-.bg-negative { background-color: #ef4444; }
+.bg-positive { 
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3);
+}
+.bg-negative { 
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3);
+}
 
 @media (max-width: 768px) {
   .dashboard-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 15px;
+    gap: 10px;
+  }
+  
+  .balance-card-primary {
+    padding: 35px 25px;
+  }
+
+  .amount-huge {
+    font-size: 2.5rem;
   }
   
   .action-panel {
@@ -692,6 +843,7 @@ const currentCategories = computed(() => {
   
   .form-row {
     flex-direction: column;
+    gap: 20px;
   }
 }
 </style>

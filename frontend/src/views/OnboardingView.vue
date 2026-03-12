@@ -106,6 +106,10 @@ const finish = async () => {
     <ToastMessage v-model:show="toast.show" :message="toast.message" :type="toast.type" />
     
     <div class="onboarding-container">
+      <div class="brand-header">
+        <h2 class="main-logo">CRED<span>CODE</span></h2>
+      </div>
+
       <div class="progress-wrapper">
         <div class="progress-info">
           <span>Passo {{ currentStep }} de {{ totalSteps }}</span>
@@ -119,27 +123,27 @@ const finish = async () => {
       <div class="content-box">
         <transition name="fade-slide" mode="out-in">
           <div :key="currentStep">
-            <div v-if="currentStep === 1">
+            <div v-if="currentStep === 1" class="step-content">
               <h2 class="step-title">Confirme seu nome</h2>
               <p class="step-description">Identificamos você, mas pode ajustar se preferir.</p>
               <div class="input-group">
-                <input v-model="userData.name" type="text" placeholder="Nome completo">
+                <input v-model="userData.name" type="text" placeholder="Nome completo" @keyup.enter="isStepValid ? next() : null">
               </div>
             </div>
 
-            <div v-if="currentStep === 2">
+            <div v-if="currentStep === 2" class="step-content">
               <h2 class="step-title">Qual sua renda mensal?</h2>
               <p class="step-description">Quanto você costuma receber por mês (líquido)?</p>
               <div class="input-group">
-                <input v-model="userData.monthly_income" type="number" placeholder="R$ 0,00">
+                <input v-model="userData.monthly_income" type="number" placeholder="R$ 0,00" @keyup.enter="isStepValid ? next() : null">
               </div>
             </div>
 
-            <div v-if="currentStep === 3">
+            <div v-if="currentStep === 3" class="step-content">
               <h2 class="step-title">Valor em Conta</h2>
               <p class="step-description">Qual o saldo disponível em sua conta hoje?</p>
               <div class="input-group">
-                <input v-model="userData.account_balance" type="number" placeholder="R$ 0,00" @keyup.enter="finish">
+                <input v-model="userData.account_balance" type="number" placeholder="R$ 0,00" @keyup.enter="isStepValid ? finish() : null">
               </div>
             </div>
           </div>
@@ -154,28 +158,231 @@ const finish = async () => {
     </div>
   </div>
   <div v-else class="loading-screen">
-    <p>Verificando terminal...</p>
+    <div class="loader-spinner"></div>
+    <p>Preparando seu terminal...</p>
   </div>
 </template>
 
 <style scoped>
-.onboarding-page { width: 100%; min-height: 100vh; display: flex; justify-content: center; align-items: center; background-color: #f4f7f9; font-family: 'Inter', sans-serif; }
-.onboarding-container { width: 100%; max-width: 550px; padding: 20px; }
-.progress-info { display: flex; justify-content: space-between; font-size: 0.85rem; color: #0a2a43; font-weight: 700; margin-bottom: 10px; text-transform: uppercase; }
-.progress-bar { width: 100%; height: 8px; background: #e0e6ed; border-radius: 4px; overflow: hidden; }
-.progress-fill { height: 100%; background: #f7b500; transition: width 0.4s ease; }
-.content-box { background: white; padding: 40px; border-radius: 16px; box-shadow: 0 10px 25px rgba(10, 42, 67, 0.05); }
-.step-title { color: #0a2a43; font-size: 1.8rem; font-weight: 800; margin-bottom: 8px; }
-.step-description { color: #64748b; margin-bottom: 30px; font-size: 1rem; }
-.input-group input { width: 100%; padding: 18px; border: 2px solid #e0e6ed; border-radius: 12px; font-size: 1.1rem; outline: none; transition: border-color 0.3s; }
-.input-group input:focus { border-color: #f7b500; }
-.action-footer { display: flex; gap: 15px; margin-top: 40px; }
-.btn-primary { flex: 2; padding: 18px; background-color: #f7b500; color: #0a2a43; border: none; border-radius: 12px; font-weight: 800; font-size: 1rem; cursor: pointer; transition: all 0.3s; }
-.btn-primary:hover:not(:disabled) { background-color: #e6a800; transform: translateY(-2px); }
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-secondary { flex: 1; padding: 18px; border: 2px solid #e0e6ed; border-radius: 12px; background: none; color: #64748b; font-weight: 700; cursor: pointer; }
-.fade-slide-enter-active, .fade-slide-leave-active { transition: all 0.3s ease; }
-.fade-slide-enter-from { opacity: 0; transform: translateX(20px); }
-.fade-slide-leave-to { opacity: 0; transform: translateX(-20px); }
-.loading-screen { display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Inter', sans-serif; color: #0a2a43; font-weight: bold; }
+.onboarding-page { 
+  width: 100%; 
+  min-height: 100vh; 
+  display: flex; 
+  justify-content: center; 
+  align-items: center; 
+  background-color: #f8fafc; 
+  font-family: 'Inter', sans-serif; 
+  padding: 20px;
+}
+
+.onboarding-container { 
+  width: 100%; 
+  max-width: 580px; 
+}
+
+.brand-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.main-logo {
+  font-size: 2.4rem;
+  margin: 0;
+  font-weight: 900;
+  color: #0f172a;
+  letter-spacing: -1.5px;
+}
+
+.main-logo span {
+  color: #f7b500;
+}
+
+.progress-wrapper {
+  margin-bottom: 25px;
+}
+
+.progress-info { 
+  display: flex; 
+  justify-content: space-between; 
+  font-size: 0.85rem; 
+  color: #64748b; 
+  font-weight: 700; 
+  margin-bottom: 12px; 
+  text-transform: uppercase; 
+  letter-spacing: 1px;
+}
+
+.progress-bar { 
+  width: 100%; 
+  height: 8px; 
+  background: #e2e8f0; 
+  border-radius: 8px; 
+  overflow: hidden; 
+}
+
+.progress-fill { 
+  height: 100%; 
+  background: linear-gradient(90deg, #f7b500 0%, #e6a800 100%); 
+  border-radius: 8px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); 
+  box-shadow: 0 0 10px rgba(247, 181, 0, 0.4);
+}
+
+.content-box { 
+  background: white; 
+  padding: 50px 45px; 
+  border-radius: 24px; 
+  box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.05), 0 8px 10px -6px rgba(15, 23, 42, 0.02); 
+  border: 1px solid #f1f5f9; 
+}
+
+.step-content {
+  min-height: 180px;
+}
+
+.step-title { 
+  color: #0f172a; 
+  font-size: 2rem; 
+  font-weight: 800; 
+  margin: 0 0 10px 0; 
+  letter-spacing: -1px;
+}
+
+.step-description { 
+  color: #64748b; 
+  margin-bottom: 35px; 
+  font-size: 1.05rem; 
+  line-height: 1.5;
+}
+
+.input-group input { 
+  width: 100%; 
+  padding: 18px; 
+  border: 1px solid #cbd5e1; 
+  background-color: #f8fafc;
+  border-radius: 12px; 
+  font-size: 1.1rem; 
+  font-family: 'Inter', sans-serif;
+  outline: none; 
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+  color: #0f172a;
+}
+
+.input-group input::placeholder {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.input-group input:focus { 
+  border-color: #f7b500; 
+  background-color: white;
+  box-shadow: 0 0 0 4px rgba(247, 181, 0, 0.1);
+}
+
+.action-footer { 
+  display: flex; 
+  gap: 15px; 
+  margin-top: 20px; 
+}
+
+.btn-primary { 
+  flex: 2; 
+  padding: 18px; 
+  background: linear-gradient(135deg, #f7b500 0%, #e6a800 100%); 
+  color: #0f172a; 
+  border: none; 
+  border-radius: 12px; 
+  font-weight: 800; 
+  font-size: 1.05rem; 
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer; 
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+  box-shadow: 0 10px 15px -3px rgba(247, 181, 0, 0.3);
+}
+
+.btn-primary:hover:not(:disabled) { 
+  transform: translateY(-3px); 
+  box-shadow: 0 15px 25px -5px rgba(247, 181, 0, 0.4);
+}
+
+.btn-primary:disabled { 
+  background: #e2e8f0;
+  color: #94a3b8;
+  box-shadow: none;
+  cursor: not-allowed; 
+}
+
+.btn-secondary { 
+  flex: 1; 
+  padding: 18px; 
+  background-color: #f1f5f9; 
+  color: #475569; 
+  border: none;
+  border-radius: 12px; 
+  font-weight: 700; 
+  font-size: 1rem;
+  cursor: pointer; 
+  transition: background-color 0.2s;
+}
+
+.btn-secondary:hover {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
+.fade-slide-enter-active, .fade-slide-leave-active { 
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
+}
+.fade-slide-enter-from { 
+  opacity: 0; 
+  transform: translateX(30px); 
+}
+.fade-slide-leave-to { 
+  opacity: 0; 
+  transform: translateX(-30px); 
+}
+
+.loading-screen { 
+  display: flex; 
+  flex-direction: column;
+  justify-content: center; 
+  align-items: center; 
+  height: 100vh; 
+  font-family: 'Inter', sans-serif; 
+  color: #0f172a; 
+  background-color: #f8fafc;
+}
+
+.loading-screen p {
+  margin-top: 20px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: #64748b;
+}
+
+.loader-spinner {
+  width: 48px;
+  height: 48px;
+  border: 5px solid #e2e8f0;
+  border-bottom-color: #f7b500;
+  border-radius: 50%;
+  display: inline-block;
+  box-sizing: border-box;
+  animation: rotation 1s linear infinite;
+}
+
+@keyframes rotation {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@media (max-width: 600px) {
+  .content-box {
+    padding: 40px 25px;
+  }
+  .step-title {
+    font-size: 1.6rem;
+  }
+}
 </style>

@@ -1,8 +1,9 @@
 <script setup>
 import { ref, onMounted, reactive } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
+const router = useRouter()
 const sidebarOpen = ref(true)
 const isMobileMenuOpen = ref(false)
 
@@ -24,6 +25,13 @@ const closeMobileMenu = () => {
 
 const isActive = (path) => {
   return route.path === path
+}
+
+const handleLogout = () => {
+  localStorage.removeItem('access_token')
+  localStorage.removeItem('refresh_token')
+  localStorage.removeItem('has_profile')
+  router.push('/')
 }
 
 onMounted(async () => {
@@ -66,6 +74,11 @@ onMounted(async () => {
           <span class="icon">💸</span>
           <span v-if="sidebarOpen" class="nav-text">Transações</span>
         </RouterLink>
+        
+        <RouterLink to="/investimentos" class="nav-item" :class="{ active: isActive('/investimentos') }" @click="closeMobileMenu">
+          <span class="icon">💰</span>
+          <span v-if="sidebarOpen" class="nav-text">Investimentos</span>
+        </RouterLink>
 
         <RouterLink to="/relatorios" class="nav-item" :class="{ active: isActive('/relatorios') }" @click="closeMobileMenu">
           <span class="icon">📈</span>
@@ -77,16 +90,6 @@ onMounted(async () => {
           <span v-if="sidebarOpen" class="nav-text">Configurações</span>
         </RouterLink>
       </nav>
-      
-      <div class="sidebar-footer">
-        <div class="user-info" v-if="sidebarOpen">
-          <div class="avatar">{{ userData.name.charAt(0).toUpperCase() }}</div>
-          <span class="user-name">{{ userData.name }}</span>
-        </div>
-        <div class="user-info-closed" v-else>
-          <div class="avatar-small">{{ userData.name.charAt(0).toUpperCase() }}</div>
-        </div>
-      </div>
       
       <button class="toggle-btn" @click="toggleSidebar">
         <span v-if="sidebarOpen">◀</span>
@@ -107,9 +110,13 @@ onMounted(async () => {
         </div>
 
         <div class="topbar-right">
-          <a href="https://wa.me/SEUNUMERO" target="_blank" class="btn-whatsapp-desktop">
-            <span class="icon-zap">💬</span> <span class="whatsapp-text">Suporte</span>
-          </a>
+          <div class="user-profile-header">
+            <div class="avatar-header">{{ userData.name.charAt(0).toUpperCase() }}</div>
+            <span class="user-name-header">{{ userData.name }}</span>
+          </div>
+          <button @click="handleLogout" class="btn-logout-header">
+            Sair
+          </button>
         </div>
       </header>
       
@@ -124,42 +131,43 @@ onMounted(async () => {
 .app-layout {
   display: flex;
   min-height: 100vh;
-  background-color: #f4f7f9;
+  background-color: #f8fafc;
   font-family: 'Inter', sans-serif;
   overflow: hidden;
 }
 
 .sidebar {
-  width: 260px;
-  background-color: #0a2a43;
+  width: 280px;
+  background-color: #0f172a;
   color: white;
   display: flex;
   flex-direction: column;
   position: relative;
-  transition: width 0.3s ease, left 0.3s ease;
-  box-shadow: 4px 0 15px rgba(0, 0, 0, 0.05);
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 4px 0 24px rgba(15, 23, 42, 0.1);
   z-index: 100;
 }
 
 .sidebar.closed {
-  width: 80px;
+  width: 90px;
 }
 
 .sidebar-brand {
-  padding: 30px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 35px 20px;
   text-align: center;
-  height: 85px;
+  height: 90px;
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-bottom: 10px;
 }
 
 .main-logo {
   font-weight: 900;
-  font-size: 1.8rem;
+  font-size: 2rem;
   margin: 0;
-  letter-spacing: -1px;
+  letter-spacing: -1.5px;
+  color: white;
 }
 
 .main-logo span {
@@ -168,9 +176,10 @@ onMounted(async () => {
 
 .main-logo-collapsed {
   font-weight: 900;
-  font-size: 1.8rem;
+  font-size: 2rem;
   margin: 0;
   color: #f7b500;
+  letter-spacing: -1px;
 }
 
 .main-logo-collapsed span {
@@ -179,10 +188,10 @@ onMounted(async () => {
 
 .sidebar-nav {
   flex: 1;
-  padding: 20px 0;
+  padding: 10px 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 8px;
   overflow-y: auto;
 }
 
@@ -193,116 +202,77 @@ onMounted(async () => {
 .nav-item {
   display: flex;
   align-items: center;
-  padding: 15px 25px;
-  color: #cbd5e1;
+  padding: 14px 20px;
+  margin: 0 16px;
+  border-radius: 14px;
+  color: #94a3b8;
   text-decoration: none;
-  font-weight: 500;
-  transition: all 0.3s;
-  border-left: 4px solid transparent;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
 }
 
-.nav-item:hover, .nav-item.active {
+.nav-item:hover:not(.active) {
   background-color: rgba(255, 255, 255, 0.05);
-  color: white;
-  border-left-color: #f7b500;
+  color: #f8fafc;
+  transform: translateX(4px);
+}
+
+.nav-item.active {
+  background: linear-gradient(135deg, rgba(247, 181, 0, 0.15) 0%, rgba(247, 181, 0, 0.05) 100%);
+  color: #f7b500;
+  box-shadow: inset 2px 0 0 0 #f7b500;
 }
 
 .sidebar.closed .nav-item {
   justify-content: center;
-  padding: 15px;
+  padding: 14px;
+  margin: 0 12px;
+}
+
+.sidebar.closed .nav-item:hover:not(.active) {
+  transform: translateY(-2px);
 }
 
 .icon {
-  margin-right: 15px;
-  font-size: 1.2rem;
+  margin-right: 16px;
+  font-size: 1.3rem;
+  transition: margin 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .sidebar.closed .icon {
   margin-right: 0;
-  font-size: 1.4rem;
-}
-
-.sidebar-footer {
-  padding: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  display: flex;
-  align-items: center;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  width: 100%;
-}
-
-.user-info-closed {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-}
-
-.avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background-color: #f7b500;
-  color: #0a2a43;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 1.2rem;
-  flex-shrink: 0;
-}
-
-.avatar-small {
-  width: 35px;
-  height: 35px;
-  border-radius: 50%;
-  background-color: #f7b500;
-  color: #0a2a43;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 1rem;
-}
-
-.user-name {
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 0.95rem;
+  font-size: 1.5rem;
 }
 
 .toggle-btn {
   position: absolute;
-  right: -14px;
+  right: -16px;
   top: 100px;
   background-color: #f7b500;
-  color: #0a2a43;
-  border: none;
+  color: #0f172a;
+  border: 4px solid #f8fafc;
   border-radius: 50%;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   z-index: 101;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-  font-size: 0.8rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  font-size: 0.7rem;
   font-weight: 900;
-  transition: transform 0.3s, background-color 0.3s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .toggle-btn:hover {
+  transform: scale(1.15);
   background-color: #e6a800;
-  transform: scale(1.1);
 }
 
 .main-wrapper {
@@ -314,13 +284,14 @@ onMounted(async () => {
 
 .top-header {
   background-color: white;
-  height: 85px;
+  height: 90px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 0 40px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
   flex-shrink: 0;
+  z-index: 90;
 }
 
 .topbar-left {
@@ -330,9 +301,63 @@ onMounted(async () => {
 }
 
 .breadcrumb {
-  color: #0a2a43;
+  color: #334155;
+  font-weight: 800;
+  font-size: 1.25rem;
+  letter-spacing: -0.5px;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.user-profile-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 14px 6px 6px;
+  background-color: #f8fafc;
+  border-radius: 30px;
+  border: 1px solid #f1f5f9;
+}
+
+.avatar-header {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f7b500 0%, #e6a800 100%);
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-weight: 800;
   font-size: 1.2rem;
+  box-shadow: 0 4px 10px rgba(247, 181, 0, 0.3);
+}
+
+.user-name-header {
+  font-weight: 700;
+  color: #0f172a;
+  font-size: 0.95rem;
+}
+
+.btn-logout-header {
+  background-color: #fff1f2;
+  color: #e11d48;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-logout-header:hover {
+  background-color: #ffe4e6;
+  transform: translateY(-2px);
 }
 
 .btn-hamburguer {
@@ -340,34 +365,11 @@ onMounted(async () => {
   background: none;
   border: none;
   cursor: pointer;
-  color: #0a2a43;
-  padding: 5px;
-  font-size: 1.5rem;
-}
-
-.btn-whatsapp-desktop {
-  background-color: #10b981;
-  color: white;
-  padding: 10px 20px;
+  color: #0f172a;
+  padding: 8px;
+  font-size: 1.6rem;
   border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.95rem;
-  text-decoration: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.3s;
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
-}
-
-.btn-whatsapp-desktop:hover {
-  background-color: #059669;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
-}
-
-.icon-zap {
-  font-size: 1.2rem;
+  background-color: #f8fafc;
 }
 
 .content-body {
@@ -383,7 +385,7 @@ onMounted(async () => {
   .sidebar {
     position: fixed;
     height: 100%;
-    left: -280px;
+    left: -300px;
     width: 280px !important;
   }
 
@@ -401,32 +403,35 @@ onMounted(async () => {
     left: 0; 
     width: 100%; 
     height: 100%;
-    background: rgba(10, 42, 67, 0.6);
-    backdrop-filter: blur(2px);
+    background: rgba(15, 23, 42, 0.5);
+    backdrop-filter: blur(4px);
     z-index: 99;
   }
   
   .top-header {
-    padding: 0 20px;
+    padding: 0 24px;
+    height: 80px;
   }
   
   .content-body {
-    padding: 20px;
+    padding: 24px;
   }
 }
 
 @media (max-width: 480px) {
-  .whatsapp-text {
+  .user-profile-header {
+    background-color: transparent;
+    border: none;
+    padding: 0;
+  }
+  .user-name-header {
     display: none;
   }
-  
-  .btn-whatsapp-desktop {
-    padding: 10px;
-    border-radius: 50%;
+  .btn-logout-header {
+    padding: 10px 16px;
   }
-  
-  .btn-whatsapp-desktop .icon-zap {
-    margin: 0;
+  .topbar-right {
+    gap: 16px;
   }
 }
 </style>
