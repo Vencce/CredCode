@@ -155,6 +155,80 @@ const totalExpense = computed(() => {
     .reduce((acc, curr) => acc + Math.abs(curr.amount), 0)
 })
 
+const totalBalance = computed(() => totalIncome.value - totalExpense.value)
+
+const totalTransactionsCount = computed(() => filteredTransactions.value.length)
+
+const categorySummary = computed(() => {
+  const map = {}
+
+  filteredTransactions.value.forEach(item => {
+    const key = item.category || 'Sem categoria'
+
+    if (!map[key]) {
+      map[key] = {
+        category: key,
+        income: 0,
+        expense: 0,
+        total: 0,
+        count: 0
+      }
+    }
+
+    if (item.type === 'income') {
+      map[key].income += Math.abs(item.amount)
+    } else {
+      map[key].expense += Math.abs(item.amount)
+    }
+
+    map[key].total = map[key].income + map[key].expense
+    map[key].count += 1
+  })
+
+  const list = Object.values(map)
+
+  const grandTotal = list.reduce((acc, curr) => acc + curr.total, 0) || 1
+
+  return list
+    .map(item => ({
+      category: item.category,
+      income: item.income,
+      expense: item.expense,
+      total: item.total,
+      count: item.count,
+      balance: item.income - item.expense,
+      percentage: (item.total / grandTotal) * 100
+    }))
+    .sort((a, b) => b.total - a.total)
+})
+
+const expenseCategories = computed(() => {
+  const total = totalExpense.value || 1
+
+  return categorySummary.value
+    .filter(item => item.expense > 0)
+    .map(item => ({
+      ...item,
+      percentageExpense: (item.expense / total) * 100
+    }))
+    .sort((a, b) => b.expense - a.expense)
+})
+
+const incomeCategories = computed(() => {
+  const total = totalIncome.value || 1
+
+  return categorySummary.value
+    .filter(item => item.income > 0)
+    .map(item => ({
+      ...item,
+      percentageIncome: (item.income / total) * 100
+    }))
+    .sort((a, b) => b.income - a.income)
+})
+
+const topExpenseCategory = computed(() => expenseCategories.value[0] || null)
+const topIncomeCategory = computed(() => incomeCategories.value[0] || null)
+
 const formatCurrency = (value) => {
   const numValue = parseFloat(value) || 0
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValue)
@@ -334,46 +408,172 @@ const executeDelete = async () => {
       </div>
     </div>
 
-    <div class="summary-cards">
-      <div class="card summary-item">
-        <div class="card-icon-wrapper positive-bg">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
-            <polyline points="17 6 23 6 23 12"></polyline>
-          </svg>
-        </div>
-        <div class="card-data">
-          <h3>Entradas</h3>
-          <span class="summary-value positive">{{ formatCurrency(totalIncome) }}</span>
-        </div>
+    <section class="dashboard-overview">
+  <div class="overview-cards">
+    <div class="card overview-card">
+      <div class="card-icon-wrapper positive-bg">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+          <polyline points="17 6 23 6 23 12"></polyline>
+        </svg>
       </div>
-      <div class="card summary-item">
-        <div class="card-icon-wrapper negative-bg">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline>
-            <polyline points="17 18 23 18 23 12"></polyline>
-          </svg>
-        </div>
-        <div class="card-data">
-          <h3>Saídas</h3>
-          <span class="summary-value negative">{{ formatCurrency(totalExpense) }}</span>
-        </div>
+      <div class="card-data">
+        <h3>Total de Entradas</h3>
+        <span class="summary-value positive">{{ formatCurrency(totalIncome) }}</span>
       </div>
-      <div class="card summary-item">
-        <div class="card-icon-wrapper neutral-bg">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="1" x2="12" y2="23"></line>
-            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-          </svg>
+    </div>
+
+    <div class="card overview-card">
+      <div class="card-icon-wrapper negative-bg">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline>
+          <polyline points="17 18 23 18 23 12"></polyline>
+        </svg>
+      </div>
+      <div class="card-data">
+        <h3>Total de Saídas</h3>
+        <span class="summary-value negative">{{ formatCurrency(totalExpense) }}</span>
+      </div>
+    </div>
+
+    <div class="card overview-card">
+      <div class="card-icon-wrapper neutral-bg">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="1" x2="12" y2="23"></line>
+          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+        </svg>
+      </div>
+      <div class="card-data">
+        <h3>Saldo do Período</h3>
+        <span :class="['summary-value', totalBalance >= 0 ? 'positive' : 'negative']">
+          {{ formatCurrency(totalBalance) }}
+        </span>
+      </div>
+    </div>
+
+    <div class="card overview-card">
+      <div class="card-icon-wrapper neutral-bg">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+      </div>
+      <div class="card-data">
+        <h3>Transações</h3>
+        <span class="summary-value">{{ totalTransactionsCount }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="category-dashboard-grid">
+    <div class="category-card">
+      <div class="category-card-header">
+        <div>
+          <h3>Saídas por Categoria</h3>
+          <p>Distribuição detalhada dos gastos no período filtrado</p>
         </div>
-        <div class="card-data">
-          <h3>Balanço</h3>
-          <span :class="['summary-value', (totalIncome - totalExpense) >= 0 ? 'positive' : 'negative']">
-            {{ formatCurrency(totalIncome - totalExpense) }}
-          </span>
+        <span v-if="topExpenseCategory" class="highlight-badge negative-soft">
+          Maior gasto: {{ topExpenseCategory.category }}
+        </span>
+      </div>
+
+      <div v-if="expenseCategories.length === 0" class="empty-category-state">
+        Nenhuma saída encontrada no período atual.
+      </div>
+
+      <div v-else class="category-list">
+        <div v-for="item in expenseCategories" :key="'exp-' + item.category" class="category-row">
+          <div class="category-row-top">
+            <div class="category-main">
+              <span class="category-name">{{ item.category }}</span>
+              <span class="category-count">{{ item.count }} transação(ões)</span>
+            </div>
+            <div class="category-values">
+              <strong class="negative">{{ formatCurrency(item.expense) }}</strong>
+              <span>{{ item.percentageExpense.toFixed(1) }}%</span>
+            </div>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill negative-fill" :style="{ width: item.percentageExpense + '%' }"></div>
+          </div>
         </div>
       </div>
     </div>
+
+    <div class="category-card">
+      <div class="category-card-header">
+        <div>
+          <h3>Entradas por Categoria</h3>
+          <p>Distribuição detalhada das receitas no período filtrado</p>
+        </div>
+        <span v-if="topIncomeCategory" class="highlight-badge positive-soft">
+          Maior entrada: {{ topIncomeCategory.category }}
+        </span>
+      </div>
+
+      <div v-if="incomeCategories.length === 0" class="empty-category-state">
+        Nenhuma entrada encontrada no período atual.
+      </div>
+
+      <div v-else class="category-list">
+        <div v-for="item in incomeCategories" :key="'inc-' + item.category" class="category-row">
+          <div class="category-row-top">
+            <div class="category-main">
+              <span class="category-name">{{ item.category }}</span>
+              <span class="category-count">{{ item.count }} transação(ões)</span>
+            </div>
+            <div class="category-values">
+              <strong class="positive">{{ formatCurrency(item.income) }}</strong>
+              <span>{{ item.percentageIncome.toFixed(1) }}%</span>
+            </div>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill positive-fill" :style="{ width: item.percentageIncome + '%' }"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="category-card full-width-card">
+    <div class="category-card-header">
+      <div>
+        <h3>Resumo Geral por Categoria</h3>
+        <p>Comparativo consolidado entre entradas, saídas e saldo</p>
+      </div>
+    </div>
+
+    <div v-if="categorySummary.length === 0" class="empty-category-state">
+      Nenhuma categoria encontrada com os filtros atuais.
+    </div>
+
+    <div v-else class="category-summary-table">
+      <div class="summary-table-head">
+        <span>Categoria</span>
+        <span>Entradas</span>
+        <span>Saídas</span>
+        <span>Saldo</span>
+        <span>Volume</span>
+      </div>
+
+      <div
+        v-for="item in categorySummary"
+        :key="'sum-' + item.category"
+        class="summary-table-row"
+      >
+        <span class="summary-cat-name">{{ item.category }}</span>
+        <span class="positive">{{ formatCurrency(item.income) }}</span>
+        <span class="negative">{{ formatCurrency(item.expense) }}</span>
+        <span :class="item.balance >= 0 ? 'positive' : 'negative'">
+          {{ formatCurrency(item.balance) }}
+        </span>
+        <span>{{ item.percentage.toFixed(1) }}%</span>
+      </div>
+    </div>
+  </div>
+</section>
 
     <div class="transactions-container">
       <table class="transaction-table">
@@ -624,13 +824,6 @@ const executeDelete = async () => {
   border-color: #f7b500;
   background-color: white;
   box-shadow: 0 0 0 4px rgba(247, 181, 0, 0.1);
-}
-
-.summary-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
-  margin-bottom: 35px;
 }
 
 .card {
@@ -996,6 +1189,216 @@ const executeDelete = async () => {
   .form-row {
     flex-direction: column;
     gap: 20px;
+  }
+}
+
+.dashboard-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-bottom: 35px;
+}
+
+.overview-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+.overview-card {
+  min-height: 110px;
+}
+
+.category-dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.category-card {
+  background: white;
+  border-radius: 20px;
+  padding: 24px;
+  border: 1px solid #f1f5f9;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.02);
+}
+
+.full-width-card {
+  width: 100%;
+}
+
+.category-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 15px;
+  margin-bottom: 22px;
+}
+
+.category-card-header h3 {
+  margin: 0 0 6px 0;
+  color: #0f172a;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.category-card-header p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
+.highlight-badge {
+  white-space: nowrap;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.positive-soft {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.negative-soft {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.category-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.category-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.category-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.category-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.category-count {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.category-values {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.progress-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.positive-fill {
+  background: linear-gradient(90deg, #34d399 0%, #10b981 100%);
+}
+
+.negative-fill {
+  background: linear-gradient(90deg, #f87171 0%, #ef4444 100%);
+}
+
+.empty-category-state {
+  color: #94a3b8;
+  font-weight: 500;
+  padding: 20px 0;
+}
+
+.category-summary-table {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.summary-table-head,
+.summary-table-row {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr 1fr 0.8fr;
+  gap: 14px;
+  align-items: center;
+}
+
+.summary-table-head {
+  color: #64748b;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.summary-table-row {
+  padding: 14px 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.95rem;
+}
+
+.summary-table-row:last-child {
+  border-bottom: none;
+}
+
+.summary-cat-name {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+@media (max-width: 1024px) {
+  .category-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .summary-table-head,
+  .summary-table-row {
+    grid-template-columns: 1.3fr 1fr 1fr;
+  }
+
+  .summary-table-head span:nth-child(4),
+  .summary-table-head span:nth-child(5),
+  .summary-table-row span:nth-child(4),
+  .summary-table-row span:nth-child(5) {
+    display: none;
+  }
+
+  .category-card-header {
+    flex-direction: column;
   }
 }
 </style>
