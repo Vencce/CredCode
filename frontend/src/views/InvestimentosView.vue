@@ -113,8 +113,21 @@ const loadLocalCryptoWallet = () => {
   const saved = localStorage.getItem('crypto_wallet')
   if (saved) {
     const parsed = JSON.parse(saved)
+
     Object.keys(parsed).forEach(key => {
-      myCrypto[key] = parsed[key]
+      const value = parsed[key]
+
+      if (typeof value === 'number') {
+        myCrypto[key] = {
+          amount: value,
+          investedBRL: 0
+        }
+      } else {
+        myCrypto[key] = {
+          amount: Number(value.amount || 0),
+          investedBRL: Number(value.investedBRL || 0)
+        }
+      }
     })
   }
 }
@@ -165,13 +178,13 @@ const filteredMarket = computed(() => {
 })
 
 const myCoinsList = computed(() => {
-  return cryptoMarket.value.filter(c => myCrypto[c.id] > 0)
+  return cryptoMarket.value.filter(c => myCrypto[c.id] && myCrypto[c.id].amount > 0)
 })
 
 const totalCryptoPortfolioBRL = computed(() => {
   let total = 0
   myCoinsList.value.forEach(coin => {
-    total += (myCrypto[coin.id] || 0) * coin.price
+    total += (myCrypto[coin.id]?.amount || 0) * coin.price
   })
   return total
 })
@@ -202,11 +215,17 @@ const closeTradeModal = () => {
 
 const setSellAll = () => {
   if (selectedCoin.value && myCrypto[selectedCoin.value.id]) {
-    tradeAmountStr.value = myCrypto[selectedCoin.value.id].toString()
+    tradeAmountStr.value = myCrypto[selectedCoin.value.id].amount.toString()
   }
 }
 
+
 const executeTrade = async () => {
+  if (!selectedCoin.value) {
+    showToast('Nenhuma moeda selecionada.', 'error')
+    return
+  }
+
   let amount = parseFloat(tradeAmountStr.value)
   if (!amount || amount <= 0) {
     showToast('Insira um valor válido maior que zero.', 'error')
@@ -218,6 +237,8 @@ const executeTrade = async () => {
     return
   }
 
+  const coin = selectedCoin.value
+
   let brlImpact = 0
   let cryptoImpact = 0
 
@@ -226,28 +247,38 @@ const executeTrade = async () => {
       showToast('Saldo insuficiente em BRL.', 'error')
       return
     }
+
     brlImpact = -Math.abs(amount)
-    cryptoImpact = amount / selectedCoin.value.price
+    cryptoImpact = amount / coin.price
   } else {
-    if (Math.abs(amount - myCrypto[selectedCoin.value.id]) < 0.000001) {
-      amount = myCrypto[selectedCoin.value.id]
-    }
-    if (amount > myCrypto[selectedCoin.value.id]) {
-      showToast(`Saldo insuficiente de ${selectedCoin.value.symbol}.`, 'error')
+    const currentPosition = myCrypto[coin.id]
+
+    if (!currentPosition || currentPosition.amount <= 0) {
+      showToast(`Saldo insuficiente de ${coin.symbol}.`, 'error')
       return
     }
-    brlImpact = Math.abs(amount * selectedCoin.value.price)
+
+    if (Math.abs(amount - currentPosition.amount) < 0.000001) {
+      amount = currentPosition.amount
+    }
+
+    if (amount > currentPosition.amount) {
+      showToast(`Saldo insuficiente de ${coin.symbol}.`, 'error')
+      return
+    }
+
+    brlImpact = Math.abs(amount * coin.price)
     cryptoImpact = -Math.abs(amount)
   }
 
   const token = localStorage.getItem('access_token')
-  const description = tradeType.value === 'buy' 
-    ? `[Investimentos] Compra de ${selectedCoin.value.symbol}`
-    : `[Investimentos] Venda de ${selectedCoin.value.symbol}`
+  const description = tradeType.value === 'buy'
+    ? `[Investimentos] Compra de ${coin.symbol}`
+    : `[Investimentos] Venda de ${coin.symbol}`
 
   const payload = {
     wallet: defaultWalletId.value,
-    description: description,
+    description,
     amount: brlImpact,
     date: new Date().toISOString().split('T')[0],
     category: 'Investimentos'
@@ -256,7 +287,7 @@ const executeTrade = async () => {
   try {
     const response = await fetch('http://localhost:8000/api/finances/expenses/', {
       method: 'POST',
-      headers: { 
+      headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
@@ -264,15 +295,31 @@ const executeTrade = async () => {
     })
 
     if (response.ok) {
-      if (!myCrypto[selectedCoin.value.id]) {
-        myCrypto[selectedCoin.value.id] = 0
+      if (!myCrypto[coin.id]) {
+        myCrypto[coin.id] = {
+          amount: 0,
+          investedBRL: 0
+        }
       }
-      myCrypto[selectedCoin.value.id] += cryptoImpact
-      
-      if (myCrypto[selectedCoin.value.id] < 0.000001) {
-        myCrypto[selectedCoin.value.id] = 0
+
+      const position = myCrypto[coin.id]
+
+      if (tradeType.value === 'buy') {
+        position.amount += cryptoImpact
+        position.investedBRL += amount
+      } else {
+        const avgCost = position.amount > 0 ? position.investedBRL / position.amount : 0
+        const costRemoved = avgCost * amount
+
+        position.amount -= amount
+        position.investedBRL -= costRemoved
+
+        if (position.amount < 0.000001) {
+          position.amount = 0
+          position.investedBRL = 0
+        }
       }
-      
+
       saveLocalCryptoWallet()
       await loadBalance(token)
       showToast('Ordem executada com sucesso!', 'success')
@@ -284,6 +331,33 @@ const executeTrade = async () => {
     showToast('Erro de conexão com o terminal.', 'error')
   }
 }
+
+const portfolioPerformance = computed(() => {
+  return myCoinsList.value.map(coin => {
+    const position = myCrypto[coin.id] || { amount: 0, investedBRL: 0 }
+
+    const amount = Number(position.amount || 0)
+    const investedBRL = Number(position.investedBRL || 0)
+    const currentValue = amount * coin.price
+    const profitLoss = currentValue - investedBRL
+    const avgPrice = amount > 0 ? investedBRL / amount : 0
+    const profitLossPct = investedBRL > 0 ? (profitLoss / investedBRL) * 100 : 0
+
+    return {
+      id: coin.id,
+      symbol: coin.symbol,
+      name: coin.name,
+      image: coin.image,
+      amount,
+      investedBRL,
+      avgPrice,
+      currentPrice: coin.price,
+      currentValue,
+      profitLoss,
+      profitLossPct
+    }
+  })
+})
 </script>
 
 <template>
@@ -319,6 +393,55 @@ const executeTrade = async () => {
           <p class="subtitle">Saldo disponível em R$</p>
         </div>
       </div>
+
+            <section class="performance-section" v-if="portfolioPerformance.length > 0">
+        <div class="section-header">
+          <h2>Margem de Lucro por Moeda</h2>
+        </div>
+
+        <div class="performance-card">
+          <div class="performance-table-head">
+            <span>Moeda</span>
+            <span>Preço Médio</span>
+            <span>Preço Atual</span>
+            <span>Resultado</span>
+            <span>Variação</span>
+          </div>
+
+          <div
+            v-for="item in portfolioPerformance"
+            :key="item.id"
+            class="performance-row"
+          >
+            <div class="coin-cell">
+              <img :src="item.image" :alt="item.name" class="mini-coin-logo" />
+              <div>
+                <strong>{{ item.symbol }}</strong>
+                <p>{{ item.name }}</p>
+              </div>
+            </div>
+
+            <span>{{ formatCurrency(item.avgPrice) }}</span>
+            <span>{{ formatCurrency(item.currentPrice) }}</span>
+
+            <span :class="item.profitLoss >= 0 ? 'text-positive' : 'text-negative'">
+              {{ formatCurrency(item.profitLoss) }}
+            </span>
+
+            <div class="performance-bar-wrap">
+              <div class="performance-bar-bg">
+                <div
+                  :class="['performance-bar-fill', item.profitLoss >= 0 ? 'profit-fill' : 'loss-fill']"
+                  :style="{ width: Math.min(Math.abs(item.profitLossPct), 100) + '%' }"
+                ></div>
+              </div>
+              <span :class="item.profitLoss >= 0 ? 'text-positive' : 'text-negative'">
+                {{ formatPercent(item.profitLossPct) }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <div class="dashboard-grid">
         <section class="market-section">
@@ -371,11 +494,11 @@ const executeTrade = async () => {
                 <img :src="coin.image" class="my-coin-logo" />
                 <div class="my-coin-details">
                   <span class="my-coin-symbol">{{ coin.symbol }}</span>
-                  <span class="my-coin-amount">{{ formatCrypto(myCrypto[coin.id], '') }}</span>
+                  <span class="my-coin-amount">{{ formatCrypto(myCrypto[coin.id].amount, '') }}</span>
                 </div>
               </div>
               <div class="my-coin-value">
-                <span class="fiat-value">{{ formatCurrency(myCrypto[coin.id] * coin.price) }}</span>
+                <span class="fiat-value">{{ formatCurrency(myCrypto[coin.id].amount * coin.price) }}</span>
                 <button 
                   @click="openTradeModal('sell', coin)" 
                   class="btn-trade-small btn-sell"
@@ -393,8 +516,8 @@ const executeTrade = async () => {
       <div class="modal-container">
         <div class="modal-header">
           <div class="modal-header-title">
-            <img :src="selectedCoin.image" class="modal-coin-logo" />
-            <h2>{{ tradeType === 'buy' ? 'Comprar' : 'Vender' }} {{ selectedCoin.symbol }}</h2>
+            <img :src="selectedCoin?.image" class="modal-coin-logo" />
+              <h2>{{ tradeType === 'buy' ? 'Comprar' : 'Vender' }} {{ selectedCoin?.symbol }}</h2>
           </div>
           <button class="close-btn" @click="closeTradeModal">&times;</button>
         </div>
@@ -404,14 +527,14 @@ const executeTrade = async () => {
           <div class="trade-info-box">
             <div class="trade-price-row">
               <span>Cotação atual:</span>
-              <span class="fw-700">{{ formatCurrency(selectedCoin.price) }}</span>
+              <span class="fw-700">{{ formatCurrency(selectedCoin?.price || 0) }}</span>
             </div>
             <div class="trade-balance-row">
               <span>Disponível:</span>
               <span class="fw-700">
                 {{ tradeType === 'buy' 
                   ? formatCurrency(userData.balance) 
-                  : formatCrypto(myCrypto[selectedCoin.id], selectedCoin.symbol) 
+                  : formatCrypto(myCrypto[selectedCoin?.id]?.amount || 0, selectedCoin?.symbol || '')
                 }}
               </span>
             </div>
@@ -419,7 +542,7 @@ const executeTrade = async () => {
 
           <div class="form-group">
             <div class="label-with-action">
-              <label>{{ tradeType === 'buy' ? 'Valor do investimento (R$)' : `Quantidade de ${selectedCoin.symbol} para venda` }}</label>
+              <label>{{ tradeType === 'buy' ? 'Valor do investimento (R$)' : `Quantidade de ${selectedCoin?.symbol || ''} para venda` }}</label>
               <button type="button" class="btn-sell-all" v-if="tradeType === 'sell'" @click="setSellAll">Vender Tudo</button>
             </div>
             <input 
@@ -436,7 +559,7 @@ const executeTrade = async () => {
             <p>Você irá {{ tradeType === 'buy' ? 'receber' : 'receber' }}:</p>
             <h3>
               {{ tradeType === 'buy' 
-                ? formatCrypto(calculatedTradeValue, selectedCoin.symbol) 
+                ? formatCrypto(calculatedTradeValue, selectedCoin?.symbol || '')
                 : formatCurrency(calculatedTradeValue) 
               }}
             </h3>
@@ -1088,4 +1211,105 @@ const executeTrade = async () => {
     width: 100%;
   }
 }
+
+.performance-section {
+  margin-bottom: 35px;
+}
+
+.performance-card {
+  background: white;
+  border-radius: 20px;
+  padding: 24px;
+  border: 1px solid #f1f5f9;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.02);
+}
+
+.performance-table-head,
+.performance-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr 1.4fr;
+  gap: 16px;
+  align-items: center;
+}
+
+.performance-table-head {
+  padding-bottom: 14px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.performance-row {
+  padding: 16px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.performance-row:last-child {
+  border-bottom: none;
+}
+
+.coin-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.coin-cell p {
+  margin: 2px 0 0 0;
+  color: #64748b;
+  font-size: 0.84rem;
+}
+
+.mini-coin-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+
+.performance-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.performance-bar-bg {
+  flex: 1;
+  height: 10px;
+  background: #f1f5f9;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.performance-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.profit-fill {
+  background: linear-gradient(90deg, #34d399 0%, #10b981 100%);
+}
+
+.loss-fill {
+  background: linear-gradient(90deg, #f87171 0%, #ef4444 100%);
+}
+
+@media (max-width: 1024px) {
+  .performance-table-head,
+  .performance-row {
+    grid-template-columns: 1fr;
+  }
+
+  .performance-table-head {
+    display: none;
+  }
+
+  .performance-row {
+    gap: 8px;
+    padding: 18px 0;
+  }
+}
+
 </style>
