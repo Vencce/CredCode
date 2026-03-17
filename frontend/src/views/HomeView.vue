@@ -1,6 +1,7 @@
 <script setup>
-import { ref, onMounted, reactive, computed } from 'vue'
+import { ref, onMounted, onUnmounted, reactive, computed, nextTick, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
+import * as echarts from 'echarts'
 import ToastMessage from '../components/ToastMessage.vue'
 import SideLayout from '../components/SideLayout.vue'
 import FooterComp from '../components/FooterComp.vue'
@@ -27,6 +28,10 @@ const defaultWalletId = ref(null)
 const showModal = ref(false)
 const modalType = ref('expense')
 
+// IMPORTANTE: ECharts DEVE usar shallowRef no Vue 3 para não quebrar a aplicação
+const chartRef = ref(null)
+const chartInstance = shallowRef(null) 
+
 const predefinedCategories = {
   income: ['Salário', 'Investimentos', 'Vendas', 'Serviços', 'Outros'],
   expense: ['Alimentação', 'Transporte', 'Moradia', 'Contas', 'Saúde', 'Lazer', 'Outros']
@@ -43,6 +48,58 @@ const showToast = (message, type = 'error') => {
   toast.message = message
   toast.type = type
   toast.show = true
+}
+
+// Lógica Segura do Gráfico ECharts
+const initChart = () => {
+  if (!chartRef.value) return
+  
+  if (!chartInstance.value) {
+    chartInstance.value = echarts.init(chartRef.value)
+  }
+
+  const option = {
+    tooltip: {
+      trigger: 'item',
+      formatter: '{b}: R$ {c} ({d}%)'
+    },
+    legend: {
+      bottom: '5%',
+      left: 'center',
+      textStyle: { color: '#64748b', fontWeight: 600 }
+    },
+    color: ['#10b981', '#ef4444'], // Verde e Vermelho
+    series: [
+      {
+        name: 'Movimentações',
+        type: 'pie',
+        radius: ['45%', '75%'],
+        avoidLabelOverlap: false,
+        itemStyle: {
+          borderRadius: 10,
+          borderColor: '#fff',
+          borderWidth: 4
+        },
+        label: { show: false, position: 'center' },
+        emphasis: {
+          label: { show: true, fontSize: 18, fontWeight: 'bold', color: '#0f172a' }
+        },
+        labelLine: { show: false },
+        data: [
+          { value: userData.income, name: 'Entradas' },
+          { value: userData.expenses, name: 'Saídas' }
+        ]
+      }
+    ]
+  }
+
+  chartInstance.value.setOption(option)
+}
+
+const handleResize = () => {
+  if (chartInstance.value) {
+    chartInstance.value.resize()
+  }
 }
 
 const loadData = async (token) => {
@@ -121,6 +178,13 @@ const loadData = async (token) => {
 
       userData.income = totalInc
       userData.expenses = totalExp
+
+      // Chama o gráfico logo após atualizar os dados de income e expenses
+      nextTick(() => {
+        if (userData.income > 0 || userData.expenses > 0) {
+          initChart()
+        }
+      })
     }
 
   } catch (error) {
@@ -139,6 +203,15 @@ onMounted(() => {
   } else {
     isAuthorized.value = true
     loadData(token)
+    window.addEventListener('resize', handleResize)
+  }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  if (chartInstance.value) {
+    chartInstance.value.dispose()
+    chartInstance.value = null
   }
 })
 
@@ -195,7 +268,7 @@ const saveTransaction = async () => {
     if (response.ok) {
       showToast('Transação registrada com sucesso!', 'success')
       closeModal()
-      loadData(token)
+      loadData(token) // Recarrega os dados e atualiza o gráfico
     } else {
       showToast('Erro ao salvar os dados da transação.', 'error')
     }
@@ -225,50 +298,66 @@ const currentCategories = computed(() => {
       </div>
     </div>
 
-    <div class="main-balance-container">
-      <div class="balance-card-primary">
-        <div class="balance-info">
-          <h3>Saldo Atual</h3>
-          <p class="amount-huge">{{ formatCurrency(userData.balance + userData.income - userData.expenses) }}</p>
+    <div class="dashboard-grid">
+      
+      <div class="dashboard-col-left">
+        <div class="main-balance-container">
+          <div class="balance-card-primary">
+            <div class="balance-info">
+              <h3>Saldo Atual</h3>
+              <p class="amount-huge">{{ formatCurrency(userData.balance + userData.income - userData.expenses) }}</p>
+            </div>
+            <div class="balance-decoration">
+              <div class="circle circle-1"></div>
+              <div class="circle circle-2"></div>
+            </div>
+          </div>
         </div>
-        <div class="balance-decoration">
-          <div class="circle circle-1"></div>
-          <div class="circle circle-2"></div>
-        </div>
-      </div>
-    </div>
-    
-    <section class="summary-cards">
-      <div class="card income-card">
-        <div class="card-icon-wrapper positive-bg">
-          <span class="card-icon">↗</span>
-        </div>
-        <div class="card-data">
-          <h3>Entradas do Mês</h3>
-          <p class="amount positive">{{ formatCurrency(userData.income) }}</p>
-        </div>
-      </div>
-      <div class="card expense-card">
-        <div class="card-icon-wrapper negative-bg">
-          <span class="card-icon">↘</span>
-        </div>
-        <div class="card-data">
-          <h3>Saídas do Mês</h3>
-          <p class="amount negative">{{ formatCurrency(userData.expenses) }}</p>
-        </div>
-      </div>
-    </section>
 
-    <section class="action-panel">
-      <button @click="openModal('income')" class="action-btn btn-income">
-        <span class="btn-icon">+</span> Nova Entrada
-      </button>
-      <button @click="openModal('expense')" class="action-btn btn-expense">
-        <span class="btn-icon">-</span> Novo Gasto
-      </button>
-    </section>
+        <section class="charts-section">
+          <div class="chart-card">
+            <h3>Distribuição do Mês</h3>
+            <div v-if="userData.income === 0 && userData.expenses === 0" class="empty-chart">
+              <p>Nenhuma transação registada para gerar o gráfico.</p>
+            </div>
+            <div v-if="userData.income > 0 || userData.expenses > 0" ref="chartRef" class="echarts-container"></div>
+          </div>
+        </section>
+      </div>
 
-    <section class="recent-transactions">
+      <div class="dashboard-col-right">
+        <section class="summary-cards">
+          <div class="card income-card">
+            <div class="card-icon-wrapper positive-bg">
+              <span class="card-icon">↗</span>
+            </div>
+            <div class="card-data">
+              <h3>Entradas do Mês</h3>
+              <p class="amount positive">{{ formatCurrency(userData.income) }}</p>
+            </div>
+          </div>
+          <div class="card expense-card">
+            <div class="card-icon-wrapper negative-bg">
+              <span class="card-icon">↘</span>
+            </div>
+            <div class="card-data">
+              <h3>Saídas do Mês</h3>
+              <p class="amount negative">{{ formatCurrency(userData.expenses) }}</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="action-panel">
+          <button @click="openModal('income')" class="action-btn btn-income">
+            <span class="btn-icon">+</span> Nova Entrada
+          </button>
+          <button @click="openModal('expense')" class="action-btn btn-expense">
+            <span class="btn-icon">-</span> Novo Gasto
+          </button>
+        </section>
+      </div>
+
+    </div> <section class="recent-transactions">
       <div class="section-title-wrapper">
         <h2>Transações Recentes</h2>
       </div>
@@ -372,8 +461,21 @@ const currentCategories = computed(() => {
   font-size: 1.05rem;
 }
 
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 25px;
+  margin-bottom: 35px;
+}
+
+.dashboard-col-left, .dashboard-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
 .main-balance-container {
-  margin-bottom: 30px;
+  width: 100%;
 }
 
 .balance-card-primary {
@@ -443,11 +545,50 @@ const currentCategories = computed(() => {
   right: 150px;
 }
 
+/* Container do ECharts com Altura Fixa Obrigatória */
+.charts-section {
+  width: 100%;
+  height: 100%;
+}
+
+.chart-card {
+  background: white;
+  border-radius: 24px;
+  padding: 25px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -4px rgba(0, 0, 0, 0.02);
+  border: 1px solid #f1f5f9;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-card h3 {
+  color: #0f172a;
+  font-size: 1.2rem;
+  font-weight: 800;
+  margin: 0 0 15px 0;
+}
+
+.echarts-container {
+  width: 100%;
+  height: 320px; /* IMPORTANTE: Fixar a altura para o ECharts renderizar */
+  display: block;
+}
+
+.empty-chart {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  color: #94a3b8;
+  font-weight: 500;
+  min-height: 320px;
+}
+
 .summary-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 25px;
-  margin-bottom: 35px;
 }
 
 .card {
@@ -507,18 +648,12 @@ const currentCategories = computed(() => {
   letter-spacing: -0.5px;
 }
 
-.positive {
-  color: #059669;
-}
-
-.negative {
-  color: #dc2626;
-}
+.positive { color: #059669; }
+.negative { color: #dc2626; }
 
 .action-panel {
   display: flex;
   gap: 20px;
-  margin-bottom: 45px;
 }
 
 .action-btn {
@@ -526,7 +661,7 @@ const currentCategories = computed(() => {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  padding: 18px 35px;
+  padding: 18px 25px;
   border-radius: 16px;
   font-weight: 700;
   font-size: 1.05rem;
@@ -534,7 +669,6 @@ const currentCategories = computed(() => {
   border: none;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   flex: 1;
-  max-width: 280px;
 }
 
 .btn-income {
@@ -654,15 +788,8 @@ const currentCategories = computed(() => {
   font-weight: 600;
 }
 
-.type-badge.income {
-  background-color: #ecfdf5;
-  color: #059669;
-}
-
-.type-badge.expense {
-  background-color: #fef2f2;
-  color: #dc2626;
-}
+.type-badge.income { background-color: #ecfdf5; color: #059669; }
+.type-badge.expense { background-color: #fef2f2; color: #dc2626; }
 
 .modal-overlay {
   position: fixed;
@@ -789,9 +916,7 @@ const currentCategories = computed(() => {
   transition: background-color 0.2s;
 }
 
-.btn-cancel:hover {
-  background-color: #e2e8f0;
-}
+.btn-cancel:hover { background-color: #e2e8f0; }
 
 .btn-save {
   flex: 1;
@@ -805,45 +930,21 @@ const currentCategories = computed(() => {
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.btn-save:hover {
-  transform: translateY(-2px);
-}
+.btn-save:hover { transform: translateY(-2px); }
 
-.bg-positive { 
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3);
-}
-.bg-negative { 
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3);
+.bg-positive { background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3); }
+.bg-negative { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3); }
+
+@media (max-width: 1024px) {
+  .dashboard-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 768px) {
-  .dashboard-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-  
-  .balance-card-primary {
-    padding: 35px 25px;
-  }
-
-  .amount-huge {
-    font-size: 2.5rem;
-  }
-  
-  .action-panel {
-    flex-direction: column;
-  }
-  
-  .action-btn {
-    max-width: 100%;
-  }
-  
-  .form-row {
-    flex-direction: column;
-    gap: 20px;
-  }
+  .dashboard-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .balance-card-primary { padding: 35px 25px; }
+  .amount-huge { font-size: 2.5rem; }
+  .action-panel { flex-direction: column; }
+  .action-btn { max-width: 100%; }
+  .form-row { flex-direction: column; gap: 20px; }
 }
 </style>
