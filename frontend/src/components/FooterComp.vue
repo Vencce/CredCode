@@ -1,5 +1,4 @@
 <script setup>
-// O ano é gerado dinamicamente, assim vocês nunca precisam atualizar o rodapé no réveillon!
 const currentYear = new Date().getFullYear()
 </script>
 
@@ -33,13 +32,14 @@ const currentYear = new Date().getFullYear()
 .creative-footer {
   margin-top: 40px;
   padding: 30px 40px;
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
-  border: 1px solid #f1f5f9;
+  background: var(--bg-card);
+  border-radius: 20px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
   position: relative;
   overflow: hidden;
   font-family: 'Inter', sans-serif;
+  transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
 }
 
 .footer-content {
@@ -59,68 +59,70 @@ const currentYear = new Date().getFullYear()
 .footer-logo {
   font-size: 1.5rem;
   font-weight: 900;
-  color: #0a2a43;
+  color: var(--text-primary);
   margin: 0;
   letter-spacing: -0.5px;
+  transition: color 0.3s;
 }
 
-/* O 'CODE' em dourado/amarelo seguindo a sua identidade visual */
 .footer-logo span {
   color: #f7b500; 
 }
 
 .slogan {
   font-size: 0.85rem;
-  color: #64748b;
+  color: var(--text-secondary);
   margin: 0;
   font-weight: 500;
+  transition: color 0.3s;
 }
 
 .credits-section {
   padding-top: 15px;
-  border-top: 1px dashed #e2e8f0;
+  border-top: 1px dashed var(--border-color);
   width: 100%;
+  transition: border-color 0.3s;
 }
 
 .copyright {
   font-size: 0.8rem;
-  color: #94a3b8;
+  color: var(--text-secondary);
   margin: 0 0 5px 0;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  transition: color 0.3s;
 }
 
 .team {
   font-size: 0.9rem;
-  color: #475569;
+  color: var(--text-secondary);
   margin: 0;
   line-height: 1.6;
+  transition: color 0.3s;
 }
 
-/* Destaca os nomes de vocês quando o usuário passa o mouse por cima */
 .highlight {
   font-weight: 700;
-  color: #0a2a43;
+  color: var(--text-primary);
   white-space: nowrap;
   transition: color 0.3s ease;
   cursor: default;
 }
 
 .highlight:hover {
-  color: #10b981; /* Fica verde (sucesso) ao passar o mouse */
+  color: #10b981;
 }
 
-/* A barrinha colorida no fundo */
 .footer-bottom-bar {
   position: absolute;
   bottom: 0;
   left: 0;
   width: 100%;
   height: 4px;
-  background: linear-gradient(90deg, #0a2a43, #10b981, #f7b500);
+  background: linear-gradient(90deg, var(--text-primary), #10b981, #f7b500);
+  opacity: 0.8;
 }
 
-/* Layout responsivo: Fica lado a lado em telas maiores */
 @media (min-width: 768px) {
   .footer-content {
     flex-direction: row;

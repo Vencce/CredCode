@@ -196,6 +196,16 @@ onUnmounted(() => {
           <span class="icon">📅</span>
           <span v-if="sidebarOpen" class="nav-text">Gastos Futuros</span>
         </RouterLink>
+
+        <RouterLink to="/metas" class="nav-item" :class="{ active: isActive('/metas') }" @click="closeMobileMenu">
+          <span class="icon">🎯</span>
+          <span v-if="sidebarOpen" class="nav-text">Metas</span>
+        </RouterLink>
+
+        <RouterLink to="/cartoes" class="nav-item" :class="{ active: isActive('/cartoes') }" @click="closeMobileMenu">
+          <span class="icon">💳</span>
+          <span v-if="sidebarOpen" class="nav-text">Cartões</span>
+        </RouterLink>
         
         <RouterLink to="/investimentos" class="nav-item" :class="{ active: isActive('/investimentos') }" @click="closeMobileMenu">
           <span class="icon">💰</span>

@@ -26,7 +26,10 @@ const displayedBalance = ref(0)
 const totalBalance = computed(() => userData.balance + userData.income - userData.expenses)
 
 const recentTransactions = ref([])
+const recentTransactionsLimited = computed(() => recentTransactions.value.slice(0, 5))
+
 const defaultWalletId = ref(null)
+const cards = ref([])
 
 const showModal = ref(false)
 const modalType = ref('expense')
@@ -43,7 +46,11 @@ const form = reactive({
   description: '',
   amount: '',
   date: new Date().toISOString().split('T')[0],
-  category: ''
+  category: '',
+  paymentMethod: 'account',
+  cardId: '',
+  isInstallment: false,
+  installmentsCount: 2
 })
 
 const showToast = (message, type = 'error') => {
@@ -182,6 +189,13 @@ const fetchWithAuth = async (url, options = {}) => {
   return response
 }
 
+const loadCards = () => {
+  const saved = localStorage.getItem('finances_cards')
+  if (saved) {
+    cards.value = JSON.parse(saved)
+  }
+}
+
 const loadData = async () => {
   try {
     let baseBalance = 0
@@ -271,6 +285,7 @@ onMounted(() => {
     }, 1500)
   } else {
     isAuthorized.value = true
+    loadCards()
     loadData()
     window.addEventListener('resize', handleResize)
     window.addEventListener('theme-changed', handleThemeChange)
@@ -292,6 +307,10 @@ const openModal = (type) => {
   form.amount = ''
   form.category = ''
   form.date = new Date().toISOString().split('T')[0]
+  form.paymentMethod = 'account'
+  form.cardId = ''
+  form.isInstallment = false
+  form.installmentsCount = 2
   showModal.value = true
 }
 
@@ -305,12 +324,63 @@ const saveTransaction = async () => {
     return
   }
 
-  if (!defaultWalletId.value) {
-    showToast('Carteira não encontrada. Recarregue a página.', 'error')
+  let finalAmount = parseFloat(form.amount)
+
+  if (modalType.value === 'expense' && form.paymentMethod === 'card') {
+    if (!form.cardId) {
+      showToast('Selecione um cartão.', 'error')
+      return
+    }
+
+    const cardIndex = cards.value.findIndex(c => c.id === form.cardId)
+    if (cardIndex === -1) {
+      showToast('Cartão não encontrado.', 'error')
+      return
+    }
+
+    const card = cards.value[cardIndex]
+
+    if (card.used + finalAmount > card.limit) {
+      showToast('Limite insuficiente no cartão.', 'error')
+      return
+    }
+
+    card.used += finalAmount
+
+    if (form.isInstallment && form.installmentsCount > 1) {
+      const valPerInstallment = finalAmount / form.installmentsCount
+      const baseDate = new Date(form.date)
+      
+      for (let i = 1; i <= form.installmentsCount; i++) {
+        const installmentDate = new Date(baseDate)
+        installmentDate.setMonth(installmentDate.getMonth() + (i - 1))
+        
+        card.expenses.push({
+          id: Date.now() + i,
+          description: `${form.description} (${i}/${form.installmentsCount})`,
+          amount: valPerInstallment,
+          date: installmentDate.toISOString().split('T')[0]
+        })
+      }
+    } else {
+      card.expenses.push({
+        id: Date.now(),
+        description: form.description,
+        amount: finalAmount,
+        date: form.date
+      })
+    }
+
+    localStorage.setItem('finances_cards', JSON.stringify(cards.value))
+    showToast('Compra lançada no cartão com sucesso!', 'success')
+    closeModal()
     return
   }
 
-  let finalAmount = parseFloat(form.amount)
+  if (!defaultWalletId.value) {
+    showToast('Carteira principal não encontrada. Recarregue a página.', 'error')
+    return
+  }
   
   if (modalType.value === 'expense') {
     finalAmount = -Math.abs(finalAmount)
@@ -441,10 +511,10 @@ const currentCategories = computed(() => {
             </tr>
           </thead>
           <tbody>
-            <tr v-if="recentTransactions.length === 0">
+            <tr v-if="recentTransactionsLimited.length === 0">
               <td colspan="4" class="empty-state">Nenhuma transação registrada.</td>
             </tr>
-            <tr v-for="item in recentTransactions" :key="item.id">
+            <tr v-for="item in recentTransactionsLimited" :key="item.id">
               <td class="td-date">{{ item.date }}</td>
               <td class="fw-600 td-desc">{{ item.description }}</td>
               <td>
@@ -471,7 +541,26 @@ const currentCategories = computed(() => {
         </div>
         
         <form @submit.prevent="saveTransaction" class="modal-form">
-          <div class="form-group">
+          <div class="form-group full-width" v-if="modalType === 'expense'">
+            <label>Forma de Pagamento</label>
+            <select v-model="form.paymentMethod">
+              <option value="account">Saldo da Conta (Débito)</option>
+              <option value="card">Cartão de Crédito</option>
+            </select>
+          </div>
+
+          <div class="form-group full-width" v-if="modalType === 'expense' && form.paymentMethod === 'card'">
+            <label>Qual Cartão?</label>
+            <select v-model="form.cardId" required>
+              <option value="" disabled>Selecione o cartão</option>
+              <option v-for="c in cards" :key="c.id" :value="c.id">
+                {{ c.name }} (Livre: {{ formatCurrency(c.limit - c.used) }})
+              </option>
+            </select>
+            <span v-if="cards.length === 0" class="error-text">Nenhum cartão cadastrado. Cadastre na aba Cartões.</span>
+          </div>
+
+          <div class="form-group full-width">
             <label>Descrição</label>
             <input v-model="form.description" type="text" placeholder="Ex: Conta de Luz" required />
           </div>
@@ -488,7 +577,20 @@ const currentCategories = computed(() => {
             </div>
           </div>
 
-          <div class="form-group">
+          <div class="form-row align-center" v-if="modalType === 'expense' && form.paymentMethod === 'card'">
+            <div class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="form.isInstallment" />
+                Compra parcelada?
+              </label>
+            </div>
+            <div class="form-group" v-if="form.isInstallment">
+              <label>Qtd. Parcelas</label>
+              <input v-model="form.installmentsCount" type="number" min="2" max="48" required />
+            </div>
+          </div>
+
+          <div class="form-group full-width">
             <label>Categoria</label>
             <select v-model="form.category" required>
               <option value="" disabled>Selecione uma categoria</option>
@@ -955,11 +1057,20 @@ const currentCategories = computed(() => {
   gap: 20px;
 }
 
+.align-center {
+  align-items: flex-end;
+}
+
 .form-group {
   display: flex;
   flex-direction: column;
   gap: 10px;
   flex: 1;
+  min-width: 0;
+}
+
+.full-width {
+  width: 100%;
 }
 
 .form-group label {
@@ -970,6 +1081,8 @@ const currentCategories = computed(() => {
 }
 
 .form-group input, .form-group select {
+  width: 100%;
+  box-sizing: border-box;
   padding: 16px;
   border: 1px solid var(--border-input);
   border-radius: 12px;
@@ -985,6 +1098,37 @@ const currentCategories = computed(() => {
   border-color: #f7b500;
   background-color: var(--bg-card);
   box-shadow: 0 0 0 4px rgba(247, 181, 0, 0.1);
+}
+
+.checkbox-group {
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  color: var(--text-primary) !important;
+  font-size: 1rem !important;
+}
+
+.checkbox-label input {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  margin: 0;
+}
+
+.error-text {
+  color: #ef4444;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-top: 5px;
 }
 
 .modal-actions {
@@ -1006,8 +1150,8 @@ const currentCategories = computed(() => {
   transition: all 0.2s;
 }
 
-.btn-cancel:hover { 
-  background-color: var(--border-color); 
+.btn-cancel:hover {
+  background-color: var(--border-color);
   color: var(--text-primary);
 }
 
@@ -1023,10 +1167,19 @@ const currentCategories = computed(() => {
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.btn-save:hover { transform: translateY(-2px); }
+.btn-save:hover {
+  transform: translateY(-2px);
+}
 
-.bg-positive { background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3); }
-.bg-negative { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3); }
+.bg-positive { 
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3);
+}
+
+.bg-negative { 
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3);
+}
 
 @media (max-width: 1024px) {
   .dashboard-grid { grid-template-columns: 1fr; }

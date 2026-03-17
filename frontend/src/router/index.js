@@ -55,6 +55,18 @@ const router = createRouter({
       component: () => import('../views/GastosFuturosView.vue'),
       meta: { requiresAuth: true }
     },
+    {
+      path: '/metas',
+      name: 'metas',
+      component: () => import('../views/MetasView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/cartoes',
+      name: 'cartoes',
+      component: () => import('../views/CartoesView.vue'),
+      meta: { requiresAuth: true }
+    },
   ],
 })
 
