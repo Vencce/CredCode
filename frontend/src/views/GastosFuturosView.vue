@@ -29,17 +29,22 @@ const predefinedCategories = {
   expense: ['Alimentação', 'Transporte', 'Moradia', 'Contas', 'Saúde', 'Lazer', 'Outros']
 }
 
+const getTomorrowDate = () => {
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  return tomorrow.toISOString().split('T')[0]
+}
+
 const form = reactive({
   description: '',
   amount: '',
-  date: new Date().toISOString().split('T')[0],
+  date: getTomorrowDate(),
   category: ''
 })
 
 const filters = reactive({
   search: '',
-  type: 'all',
-  period: 'all'
+  type: 'all'
 })
 
 const showToast = (message, type = 'error') => {
@@ -106,8 +111,10 @@ const loadData = async () => {
 
     if (expensesRes.ok) {
       const expenses = await expensesRes.json()
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
 
-      transactions.value = expenses.map(item => {
+      const parsedTransactions = expenses.map(item => {
         const val = parseFloat(item.amount || item.value || 0)
         const dateVal = item.date || item.created_at || ''
         const dateParts = dateVal.split('-')
@@ -118,6 +125,11 @@ const loadData = async () => {
           formattedDate = `${dateParts[2].substring(0, 2)}/${dateParts[1]}/${dateParts[0]}`
           rawDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2].substring(0, 2)))
         }
+        
+        rawDate.setHours(0, 0, 0, 0)
+        
+        const diffTime = rawDate.getTime() - today.getTime()
+        const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
 
         let cat = item.category || 'Geral'
         let desc = item.description || 'Sem descrição'
@@ -137,9 +149,12 @@ const loadData = async () => {
           amount: val,
           type: val >= 0 ? 'income' : 'expense',
           date: formattedDate,
-          rawDate: rawDate
+          rawDate: rawDate,
+          daysRemaining: daysRemaining
         }
-      }).reverse()
+      })
+
+      transactions.value = parsedTransactions.filter(t => t.daysRemaining > 0).sort((a, b) => a.rawDate - b.rawDate)
     }
 
   } catch (error) {
@@ -162,114 +177,26 @@ onMounted(() => {
 })
 
 const filteredTransactions = computed(() => {
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
-
   return transactions.value.filter(t => {
     const searchString = filters.search.toLowerCase()
     const matchesSearch = t.description.toLowerCase().includes(searchString) ||
       t.category.toLowerCase().includes(searchString)
     const matchesType = filters.type === 'all' || t.type === filters.type
-    
-    let matchesPeriod = true
-    if (filters.period !== 'all') {
-      const days = parseInt(filters.period)
-      const tDate = new Date(t.rawDate)
-      tDate.setHours(0, 0, 0, 0)
-      const diffTime = now.getTime() - tDate.getTime()
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-      matchesPeriod = diffDays >= 0 && diffDays <= days
-    }
-
-    return matchesSearch && matchesType && matchesPeriod
+    return matchesSearch && matchesType
   })
 })
 
-const totalIncome = computed(() => {
+const totalFutureIncome = computed(() => {
   return filteredTransactions.value
     .filter(t => t.type === 'income')
     .reduce((acc, curr) => acc + curr.amount, 0)
 })
 
-const totalExpense = computed(() => {
+const totalFutureExpense = computed(() => {
   return filteredTransactions.value
     .filter(t => t.type === 'expense')
     .reduce((acc, curr) => acc + Math.abs(curr.amount), 0)
 })
-
-const totalBalance = computed(() => totalIncome.value - totalExpense.value)
-
-const totalTransactionsCount = computed(() => filteredTransactions.value.length)
-
-const categorySummary = computed(() => {
-  const map = {}
-
-  filteredTransactions.value.forEach(item => {
-    const key = item.category || 'Sem categoria'
-
-    if (!map[key]) {
-      map[key] = {
-        category: key,
-        income: 0,
-        expense: 0,
-        total: 0,
-        count: 0
-      }
-    }
-
-    if (item.type === 'income') {
-      map[key].income += Math.abs(item.amount)
-    } else {
-      map[key].expense += Math.abs(item.amount)
-    }
-
-    map[key].total = map[key].income + map[key].expense
-    map[key].count += 1
-  })
-
-  const list = Object.values(map)
-
-  const grandTotal = list.reduce((acc, curr) => acc + curr.total, 0) || 1
-
-  return list
-    .map(item => ({
-      category: item.category,
-      income: item.income,
-      expense: item.expense,
-      total: item.total,
-      count: item.count,
-      balance: item.income - item.expense,
-      percentage: (item.total / grandTotal) * 100
-    }))
-    .sort((a, b) => b.total - a.total)
-})
-
-const expenseCategories = computed(() => {
-  const total = totalExpense.value || 1
-
-  return categorySummary.value
-    .filter(item => item.expense > 0)
-    .map(item => ({
-      ...item,
-      percentageExpense: (item.expense / total) * 100
-    }))
-    .sort((a, b) => b.expense - a.expense)
-})
-
-const incomeCategories = computed(() => {
-  const total = totalIncome.value || 1
-
-  return categorySummary.value
-    .filter(item => item.income > 0)
-    .map(item => ({
-      ...item,
-      percentageIncome: (item.income / total) * 100
-    }))
-    .sort((a, b) => b.income - a.income)
-})
-
-const topExpenseCategory = computed(() => expenseCategories.value[0] || null)
-const topIncomeCategory = computed(() => incomeCategories.value[0] || null)
 
 const formatCurrency = (value) => {
   const numValue = parseFloat(value) || 0
@@ -300,7 +227,7 @@ const openModal = (type, item = null) => {
     form.description = ''
     form.amount = ''
     form.category = ''
-    form.date = new Date().toISOString().split('T')[0]
+    form.date = getTomorrowDate()
   }
   
   showModal.value = true
@@ -353,11 +280,11 @@ const saveTransaction = async () => {
     })
 
     if (response.ok) {
-      showToast(editingId.value ? 'Transação atualizada com sucesso!' : 'Transação registrada com sucesso!', 'success')
+      showToast(editingId.value ? 'Lançamento atualizado com sucesso!' : 'Lançamento futuro registrado!', 'success')
       closeModal()
       loadData()
     } else {
-      showToast('Erro ao salvar os dados da transação.', 'error')
+      showToast('Erro ao salvar os dados.', 'error')
     }
   } catch (error) {
     showToast('Erro de conexão com o terminal.', 'error')
@@ -383,10 +310,10 @@ const executeDelete = async () => {
     })
 
     if (response.ok) {
-      showToast('Transação excluída com sucesso!', 'success')
+      showToast('Lançamento excluído com sucesso!', 'success')
       loadData()
     } else {
-      showToast('Erro ao excluir a transação.', 'error')
+      showToast('Erro ao excluir o lançamento.', 'error')
     }
   } catch (error) {
     showToast('Erro de conexão com o terminal.', 'error')
@@ -402,16 +329,61 @@ const executeDelete = async () => {
   <SideLayout v-if="isAuthorized">
     <div class="page-header">
       <div class="header-titles">
-        <h1>Transações</h1>
-        <p>Acompanhe e filtre todas as suas movimentações</p>
+        <h1>Gastos Futuros</h1>
+        <p>Programe e acompanhe seus próximos compromissos</p>
       </div>
       <div class="header-actions">
         <button @click="openModal('income')" class="action-btn btn-income">
-          <span class="btn-icon">+</span> Nova Entrada
+          <span class="btn-icon">+</span> Receber
         </button>
         <button @click="openModal('expense')" class="action-btn btn-expense">
-          <span class="btn-icon">-</span> Novo Gasto
+          <span class="btn-icon">-</span> Pagar
         </button>
+      </div>
+    </div>
+
+    <div class="summary-cards">
+      <div class="card summary-item highlight-card">
+        <div class="card-icon-wrapper highlight-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+        </div>
+        <div class="card-data">
+          <h3>Balanço Projetado</h3>
+          <span :class="['summary-value', (totalFutureIncome - totalFutureExpense) >= 0 ? 'text-positive' : 'text-negative']">
+            {{ formatCurrency(totalFutureIncome - totalFutureExpense) }}
+          </span>
+        </div>
+      </div>
+      
+      <div class="card summary-item">
+        <div class="card-icon-wrapper positive-bg">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+            <polyline points="17 6 23 6 23 12"></polyline>
+          </svg>
+        </div>
+        <div class="card-data">
+          <h3>A Receber</h3>
+          <span class="summary-value positive">{{ formatCurrency(totalFutureIncome) }}</span>
+        </div>
+      </div>
+
+      <div class="card summary-item">
+        <div class="card-icon-wrapper negative-bg">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline>
+            <polyline points="17 18 23 18 23 12"></polyline>
+          </svg>
+        </div>
+        <div class="card-data">
+          <h3>A Pagar</h3>
+          <span class="summary-value negative">{{ formatCurrency(totalFutureExpense) }}</span>
+        </div>
       </div>
     </div>
 
@@ -421,223 +393,46 @@ const executeDelete = async () => {
           <circle cx="11" cy="11" r="8"></circle>
           <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
         </svg>
-        <input type="text" v-model="filters.search" placeholder="Buscar por descrição ou categoria...">
+        <input type="text" v-model="filters.search" placeholder="Buscar lançamentos futuros...">
       </div>
       
       <div class="filter-group">
         <select v-model="filters.type">
-          <option value="all">Todas as transações</option>
-          <option value="income">Apenas Entradas</option>
-          <option value="expense">Apenas Saídas</option>
-        </select>
-      </div>
-
-      <div class="filter-group">
-        <select v-model="filters.period">
-          <option value="all">Todo o período</option>
-          <option value="7">Últimos 7 dias</option>
-          <option value="15">Últimos 15 dias</option>
-          <option value="30">Últimos 30 dias</option>
-          <option value="60">Últimos 2 meses</option>
+          <option value="all">Todos os lançamentos</option>
+          <option value="income">Apenas a Receber</option>
+          <option value="expense">Apenas a Pagar</option>
         </select>
       </div>
     </div>
-
-    <section class="dashboard-overview">
-      <div class="overview-cards">
-        <div class="card overview-card">
-          <div class="card-icon-wrapper positive-bg">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
-              <polyline points="17 6 23 6 23 12"></polyline>
-            </svg>
-          </div>
-          <div class="card-data">
-            <h3>Total de Entradas</h3>
-            <span class="summary-value positive">{{ formatCurrency(totalIncome) }}</span>
-          </div>
-        </div>
-
-        <div class="card overview-card">
-          <div class="card-icon-wrapper negative-bg">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline>
-              <polyline points="17 18 23 18 23 12"></polyline>
-            </svg>
-          </div>
-          <div class="card-data">
-            <h3>Total de Saídas</h3>
-            <span class="summary-value negative">{{ formatCurrency(totalExpense) }}</span>
-          </div>
-        </div>
-
-        <div class="card overview-card">
-          <div class="card-icon-wrapper neutral-bg">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="1" x2="12" y2="23"></line>
-              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-            </svg>
-          </div>
-          <div class="card-data">
-            <h3>Saldo do Período</h3>
-            <span :class="['summary-value', totalBalance >= 0 ? 'positive' : 'negative']">
-              {{ formatCurrency(totalBalance) }}
-            </span>
-          </div>
-        </div>
-
-        <div class="card overview-card">
-          <div class="card-icon-wrapper neutral-bg">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="4" width="18" height="18" rx="2"></rect>
-              <line x1="8" y1="2" x2="8" y2="6"></line>
-              <line x1="16" y1="2" x2="16" y2="6"></line>
-              <line x1="3" y1="10" x2="21" y2="10"></line>
-            </svg>
-          </div>
-          <div class="card-data">
-            <h3>Transações</h3>
-            <span class="summary-value">{{ totalTransactionsCount }}</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="category-dashboard-grid">
-        <div class="category-card">
-          <div class="category-card-header">
-            <div>
-              <h3>Saídas por Categoria</h3>
-              <p>Distribuição detalhada dos gastos no período filtrado</p>
-            </div>
-            <span v-if="topExpenseCategory" class="highlight-badge negative-soft">
-              Maior gasto: {{ topExpenseCategory.category }}
-            </span>
-          </div>
-
-          <div v-if="expenseCategories.length === 0" class="empty-category-state">
-            Nenhuma saída encontrada no período atual.
-          </div>
-
-          <div v-else class="category-list">
-            <div v-for="item in expenseCategories" :key="'exp-' + item.category" class="category-row">
-              <div class="category-row-top">
-                <div class="category-main">
-                  <span class="category-name">{{ item.category }}</span>
-                  <span class="category-count">{{ item.count }} transação(ões)</span>
-                </div>
-                <div class="category-values">
-                  <strong class="negative">{{ formatCurrency(item.expense) }}</strong>
-                  <span>{{ item.percentageExpense.toFixed(1) }}%</span>
-                </div>
-              </div>
-              <div class="progress-track">
-                <div class="progress-fill negative-fill" :style="{ width: item.percentageExpense + '%' }"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="category-card">
-          <div class="category-card-header">
-            <div>
-              <h3>Entradas por Categoria</h3>
-              <p>Distribuição detalhada das receitas no período filtrado</p>
-            </div>
-            <span v-if="topIncomeCategory" class="highlight-badge positive-soft">
-              Maior entrada: {{ topIncomeCategory.category }}
-            </span>
-          </div>
-
-          <div v-if="incomeCategories.length === 0" class="empty-category-state">
-            Nenhuma entrada encontrada no período atual.
-          </div>
-
-          <div v-else class="category-list">
-            <div v-for="item in incomeCategories" :key="'inc-' + item.category" class="category-row">
-              <div class="category-row-top">
-                <div class="category-main">
-                  <span class="category-name">{{ item.category }}</span>
-                  <span class="category-count">{{ item.count }} transação(ões)</span>
-                </div>
-                <div class="category-values">
-                  <strong class="positive">{{ formatCurrency(item.income) }}</strong>
-                  <span>{{ item.percentageIncome.toFixed(1) }}%</span>
-                </div>
-              </div>
-              <div class="progress-track">
-                <div class="progress-fill positive-fill" :style="{ width: item.percentageIncome + '%' }"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="category-card full-width-card">
-        <div class="category-card-header">
-          <div>
-            <h3>Resumo Geral por Categoria</h3>
-            <p>Comparativo consolidado entre entradas, saídas e saldo</p>
-          </div>
-        </div>
-
-        <div v-if="categorySummary.length === 0" class="empty-category-state">
-          Nenhuma categoria encontrada com os filtros atuais.
-        </div>
-
-        <div v-else class="category-summary-table">
-          <div class="summary-table-head">
-            <span>Categoria</span>
-            <span>Entradas</span>
-            <span>Saídas</span>
-            <span>Saldo</span>
-            <span>Volume</span>
-          </div>
-
-          <div
-            v-for="item in categorySummary"
-            :key="'sum-' + item.category"
-            class="summary-table-row"
-          >
-            <span class="summary-cat-name">{{ item.category }}</span>
-            <span class="positive">{{ formatCurrency(item.income) }}</span>
-            <span class="negative">{{ formatCurrency(item.expense) }}</span>
-            <span :class="item.balance >= 0 ? 'positive' : 'negative'">
-              {{ formatCurrency(item.balance) }}
-            </span>
-            <span>{{ item.percentage.toFixed(1) }}%</span>
-          </div>
-        </div>
-      </div>
-    </section>
 
     <div class="transactions-container">
       <table class="transaction-table">
         <thead>
           <tr>
+            <th>Prazo</th>
             <th>Data</th>
             <th>Descrição</th>
             <th>Categoria</th>
-            <th>Tipo</th>
             <th class="align-right">Valor</th>
             <th class="align-center">Ações</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="filteredTransactions.length === 0">
-            <td colspan="6" class="empty-state">Nenhuma transação encontrada com os filtros atuais.</td>
+            <td colspan="6" class="empty-state">Nenhum lançamento futuro programado.</td>
           </tr>
           <tr v-for="item in filteredTransactions" :key="item.id">
-            <td class="td-date">{{ item.date }}</td>
-            <td class="fw-600 td-desc">{{ item.description }}</td>
+            <td>
+              <span :class="['days-badge', item.daysRemaining <= 3 ? 'urgent' : item.daysRemaining <= 7 ? 'warning' : 'safe']">
+                Em {{ item.daysRemaining }} dia{{ item.daysRemaining > 1 ? 's' : '' }}
+              </span>
+            </td>
+            <td class="td-date fw-600">{{ item.date }}</td>
+            <td class="fw-700 td-desc">{{ item.description }}</td>
             <td>
               <span class="category-tag">{{ item.category }}</span>
             </td>
-            <td>
-              <span :class="['type-badge', item.type]">
-                {{ item.type === 'income' ? 'Entrada' : 'Saída' }}
-              </span>
-            </td>
-            <td :class="['align-right fw-700', item.type === 'income' ? 'text-positive' : 'text-negative']">
+            <td :class="['align-right fw-800', item.type === 'income' ? 'text-positive' : 'text-negative']">
               {{ item.type === 'income' ? '+' : '-' }} {{ formatCurrency(Math.abs(item.amount)) }}
             </td>
             <td class="align-center actions-cell">
@@ -658,16 +453,16 @@ const executeDelete = async () => {
     <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
       <div class="modal-container">
         <div class="modal-header">
-          <h2>{{ editingId ? 'Editar Transação' : (modalType === 'income' ? 'Nova Entrada' : 'Novo Gasto') }}</h2>
+          <h2>{{ editingId ? 'Editar Lançamento' : (modalType === 'income' ? 'Novo Recebimento' : 'Novo Gasto') }}</h2>
           <button class="close-btn" @click="closeModal">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
-        
+
         <form @submit.prevent="saveTransaction" class="modal-form">
           <div class="form-group">
             <label>Descrição</label>
-            <input v-model="form.description" type="text" placeholder="Ex: Conta de Luz" required />
+            <input v-model="form.description" type="text" placeholder="Ex: Aluguel Mensal" required />
           </div>
 
           <div class="form-row">
@@ -675,9 +470,9 @@ const executeDelete = async () => {
               <label>Valor (R$)</label>
               <input v-model="form.amount" type="number" step="0.01" min="0.01" placeholder="0.00" required />
             </div>
-            
+
             <div class="form-group">
-              <label>Data</label>
+              <label>Data de Vencimento</label>
               <input v-model="form.date" type="date" required />
             </div>
           </div>
@@ -693,7 +488,7 @@ const executeDelete = async () => {
           <div class="modal-actions">
             <button type="button" class="btn-cancel" @click="closeModal">Cancelar</button>
             <button type="submit" :class="['btn-save', modalType === 'income' ? 'bg-positive' : 'bg-negative']">
-              Salvar
+              Agendar
             </button>
           </div>
         </form>
@@ -703,13 +498,13 @@ const executeDelete = async () => {
     <div v-if="showDeleteModal" class="modal-overlay" @click.self="closeDeleteModal">
       <div class="modal-container delete-modal">
         <div class="modal-header">
-          <h2 class="text-negative">Excluir Transação</h2>
+          <h2 class="text-negative">Excluir Lançamento</h2>
           <button class="close-btn" @click="closeDeleteModal">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
         <div class="modal-body">
-          <p>Tem certeza que deseja excluir esta transação? Esta ação não poderá ser desfeita.</p>
+          <p>Tem certeza que deseja excluir este lançamento programado? Esta ação não poderá ser desfeita.</p>
         </div>
         <div class="modal-actions">
           <button type="button" class="btn-cancel" @click="closeDeleteModal">Cancelar</button>
@@ -793,6 +588,75 @@ const executeDelete = async () => {
   box-shadow: 0 15px 25px -5px rgba(239, 68, 68, 0.4);
 }
 
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-bottom: 35px;
+}
+
+.card {
+  background: var(--bg-card);
+  padding: 25px 30px;
+  border-radius: 20px;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.3s, border-color 0.3s;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+.highlight-card {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: none;
+}
+
+.card-data h3 {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 8px 0;
+  transition: color 0.3s;
+}
+
+.highlight-card .card-data h3 {
+  color: #94a3b8;
+}
+
+.summary-value {
+  font-size: 1.8rem;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: -0.5px;
+  color: var(--text-primary);
+  display: block;
+  transition: color 0.3s;
+}
+
+.text-positive { color: #059669; }
+.text-negative { color: #dc2626; }
+
+.card-icon-wrapper {
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.positive-bg { background-color: var(--positive-bg); color: #10b981; }
+.negative-bg { background-color: var(--negative-bg); color: #ef4444; }
+.highlight-icon { background-color: rgba(255, 255, 255, 0.1); color: #f7b500; }
+
 .filters-section {
   display: flex;
   flex-wrap: wrap;
@@ -841,7 +705,7 @@ const executeDelete = async () => {
 
 .filter-group {
   flex: 1;
-  min-width: 180px;
+  min-width: 200px;
 }
 
 .filter-group select {
@@ -863,58 +727,6 @@ const executeDelete = async () => {
   background-color: var(--bg-card);
   box-shadow: 0 0 0 4px rgba(247, 181, 0, 0.1);
 }
-
-.card {
-  background: var(--bg-card);
-  padding: 20px 25px;
-  border-radius: 20px;
-  box-shadow: var(--shadow-md);
-  border: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.3s, border-color 0.3s;
-}
-
-.card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
-}
-
-.card-icon-wrapper {
-  width: 55px;
-  height: 55px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.positive-bg { background-color: var(--positive-bg); color: #10b981; }
-.negative-bg { background-color: var(--negative-bg); color: #ef4444; }
-.neutral-bg { background-color: var(--neutral-bg); color: var(--text-secondary); }
-
-.card-data h3 {
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin: 0 0 5px 0;
-  transition: color 0.3s;
-}
-
-.summary-value {
-  font-size: 1.6rem;
-  font-weight: 800;
-  margin: 0;
-  letter-spacing: -0.5px;
-  color: var(--text-primary);
-  transition: color 0.3s;
-}
-
-.positive { color: #059669; }
-.negative { color: #dc2626; }
 
 .transactions-container {
   background: var(--bg-card);
@@ -969,6 +781,19 @@ const executeDelete = async () => {
   background-color: var(--bg-main);
 }
 
+.days-badge {
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.urgent { background-color: var(--negative-bg); color: #dc2626; }
+.warning { background-color: rgba(245, 158, 11, 0.15); color: #d97706; }
+.safe { background-color: var(--positive-bg); color: #059669; }
+
 .td-date {
   color: var(--text-secondary) !important;
   font-size: 0.95rem !important;
@@ -990,8 +815,7 @@ const executeDelete = async () => {
 .actions-cell { white-space: nowrap; }
 .fw-600 { font-weight: 600; }
 .fw-700 { font-weight: 700; }
-.text-positive { color: #059669 !important; }
-.text-negative { color: #dc2626 !important; }
+.fw-800 { font-weight: 800; }
 
 .category-tag {
   background-color: var(--neutral-bg);
@@ -1001,16 +825,6 @@ const executeDelete = async () => {
   font-size: 0.85rem;
   font-weight: 600;
 }
-
-.type-badge {
-  padding: 6px 12px;
-  border-radius: 12px;
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.type-badge.income { background-color: var(--positive-bg); color: #059669; }
-.type-badge.expense { background-color: var(--negative-bg); color: #dc2626; }
 
 .action-icon {
   background: var(--bg-card);
@@ -1239,227 +1053,6 @@ const executeDelete = async () => {
   .form-row {
     flex-direction: column;
     gap: 20px;
-  }
-}
-
-.dashboard-overview {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  margin-bottom: 35px;
-}
-
-.overview-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 20px;
-}
-
-.overview-card {
-  min-height: 110px;
-}
-
-.category-dashboard-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-}
-
-.category-card {
-  background: var(--bg-card);
-  border-radius: 20px;
-  padding: 24px;
-  border: 1px solid var(--border-color);
-  box-shadow: var(--shadow-md);
-  transition: background-color 0.3s, border-color 0.3s;
-}
-
-.full-width-card {
-  width: 100%;
-}
-
-.category-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 15px;
-  margin-bottom: 22px;
-}
-
-.category-card-header h3 {
-  margin: 0 0 6px 0;
-  color: var(--text-primary);
-  font-size: 1.15rem;
-  font-weight: 800;
-  transition: color 0.3s;
-}
-
-.category-card-header p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 0.95rem;
-  transition: color 0.3s;
-}
-
-.highlight-badge {
-  white-space: nowrap;
-  padding: 8px 12px;
-  border-radius: 12px;
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-
-.positive-soft {
-  background: var(--positive-bg);
-  color: #059669;
-}
-
-.negative-soft {
-  background: var(--negative-bg);
-  color: #dc2626;
-}
-
-.category-list {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.category-row {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.category-row-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-}
-
-.category-main {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.category-name {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  transition: color 0.3s;
-}
-
-.category-count {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  transition: color 0.3s;
-}
-
-.category-values {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-  transition: color 0.3s;
-}
-
-.progress-track {
-  width: 100%;
-  height: 10px;
-  border-radius: 999px;
-  background: var(--border-color);
-  overflow: hidden;
-  transition: background-color 0.3s;
-}
-
-.progress-fill {
-  height: 100%;
-  border-radius: 999px;
-  transition: width 0.4s ease;
-}
-
-.positive-fill {
-  background: linear-gradient(90deg, #34d399 0%, #10b981 100%);
-}
-
-.negative-fill {
-  background: linear-gradient(90deg, #f87171 0%, #ef4444 100%);
-}
-
-.empty-category-state {
-  color: var(--text-secondary);
-  font-weight: 500;
-  padding: 20px 0;
-  transition: color 0.3s;
-}
-
-.category-summary-table {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.summary-table-head,
-.summary-table-row {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr 1fr 1fr 0.8fr;
-  gap: 14px;
-  align-items: center;
-}
-
-.summary-table-head {
-  color: var(--text-secondary);
-  font-size: 0.82rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 700;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border-input);
-  transition: color 0.3s, border-color 0.3s;
-}
-
-.summary-table-row {
-  padding: 14px 0;
-  border-bottom: 1px solid var(--border-color);
-  font-size: 0.95rem;
-  transition: border-color 0.3s;
-}
-
-.summary-table-row:last-child {
-  border-bottom: none;
-}
-
-.summary-cat-name {
-  font-weight: 700;
-  color: var(--text-primary);
-  transition: color 0.3s;
-}
-
-@media (max-width: 1024px) {
-  .category-dashboard-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 768px) {
-  .summary-table-head,
-  .summary-table-row {
-    grid-template-columns: 1.3fr 1fr 1fr;
-  }
-
-  .summary-table-head span:nth-child(4),
-  .summary-table-head span:nth-child(5),
-  .summary-table-row span:nth-child(4),
-  .summary-table-row span:nth-child(5) {
-    display: none;
-  }
-
-  .category-card-header {
-    flex-direction: column;
   }
 }
 </style>

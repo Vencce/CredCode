@@ -22,11 +22,55 @@ const showToast = (message, type = 'error') => {
   toast.show = true
 }
 
-const loadData = async (token) => {
+const fetchWithAuth = async (url, options = {}) => {
+  let token = localStorage.getItem('access_token')
+  let headers = {
+    ...options.headers,
+    'Authorization': `Bearer ${token}`
+  }
+  
+  let response = await fetch(url, { ...options, headers })
+  
+  if (response.status === 401) {
+    const refreshToken = localStorage.getItem('refresh_token')
+    if (refreshToken) {
+      try {
+        const refreshResponse = await fetch('http://localhost:8000/api/auth/refresh/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh: refreshToken })
+        })
+        
+        if (refreshResponse.ok) {
+          const data = await refreshResponse.json()
+          localStorage.setItem('access_token', data.access)
+          headers['Authorization'] = `Bearer ${data.access}`
+          response = await fetch(url, { ...options, headers })
+        } else {
+          localStorage.removeItem('access_token')
+          localStorage.removeItem('refresh_token')
+          localStorage.removeItem('has_profile')
+          router.push('/')
+        }
+      } catch (e) {
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        localStorage.removeItem('has_profile')
+        router.push('/')
+      }
+    } else {
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      localStorage.removeItem('has_profile')
+      router.push('/')
+    }
+  }
+  return response
+}
+
+const loadData = async () => {
   try {
-    const expensesRes = await fetch('http://localhost:8000/api/finances/expenses/', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
+    const expensesRes = await fetchWithAuth('http://localhost:8000/api/finances/expenses/')
 
     if (expensesRes.ok) {
       const expenses = await expensesRes.json()
@@ -68,7 +112,7 @@ onMounted(() => {
     }, 1500)
   } else {
     isAuthorized.value = true
-    loadData(token)
+    loadData()
   }
 })
 
@@ -248,17 +292,19 @@ const formatCurrency = (value) => {
 }
 
 .header-titles h1 {
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 2rem;
   font-weight: 800;
   margin: 0 0 4px 0;
   letter-spacing: -0.5px;
+  transition: color 0.3s;
 }
 
 .header-titles p {
-  color: #64748b;
+  color: var(--text-secondary);
   margin: 0;
   font-size: 1.05rem;
+  transition: color 0.3s;
 }
 
 .summary-cards {
@@ -269,20 +315,20 @@ const formatCurrency = (value) => {
 }
 
 .card {
-  background: white;
+  background: var(--bg-card);
   padding: 25px 30px;
   border-radius: 20px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.02);
-  border: 1px solid #f1f5f9;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.3s, border-color 0.3s;
 }
 
 .card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-lg);
 }
 
 .highlight-card {
@@ -291,12 +337,13 @@ const formatCurrency = (value) => {
 }
 
 .card-data h3 {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.9rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin: 0 0 8px 0;
+  transition: color 0.3s;
 }
 
 .highlight-card .card-data h3 {
@@ -308,8 +355,9 @@ const formatCurrency = (value) => {
   font-weight: 800;
   margin: 0;
   letter-spacing: -0.5px;
-  color: #0f172a;
+  color: var(--text-primary);
   display: block;
+  transition: color 0.3s;
 }
 
 .summary-subtitle {
@@ -331,8 +379,8 @@ const formatCurrency = (value) => {
   justify-content: center;
 }
 
-.positive-bg { background-color: #ecfdf5; color: #10b981; }
-.negative-bg { background-color: #fef2f2; color: #ef4444; }
+.positive-bg { background-color: var(--positive-bg); color: #10b981; }
+.negative-bg { background-color: var(--negative-bg); color: #ef4444; }
 .highlight-icon { background-color: rgba(255, 255, 255, 0.1); color: #f7b500; }
 
 .reports-grid {
@@ -343,24 +391,27 @@ const formatCurrency = (value) => {
 }
 
 .report-section {
-  background: white;
+  background: var(--bg-card);
   border-radius: 20px;
   padding: 30px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.02);
-  border: 1px solid #f1f5f9;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
+  transition: background-color 0.3s, border-color 0.3s;
 }
 
 .section-header {
   margin-bottom: 25px;
   padding-bottom: 15px;
-  border-bottom: 2px solid #f8fafc;
+  border-bottom: 2px solid var(--border-input);
+  transition: border-color 0.3s;
 }
 
 .section-header h2 {
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 1.3rem;
   font-weight: 800;
   margin: 0;
+  transition: color 0.3s;
 }
 
 .categories-list {
@@ -382,22 +433,25 @@ const formatCurrency = (value) => {
 }
 
 .cat-name {
-  color: #334155;
+  color: var(--text-primary);
   font-weight: 600;
   font-size: 0.95rem;
+  transition: color 0.3s;
 }
 
 .cat-amount {
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 0.95rem;
+  transition: color 0.3s;
 }
 
 .cat-bar-bg {
   width: 100%;
   height: 8px;
-  background-color: #f1f5f9;
+  background-color: var(--border-color);
   border-radius: 4px;
   overflow: hidden;
+  transition: background-color 0.3s;
 }
 
 .cat-bar-fill {
@@ -411,16 +465,18 @@ const formatCurrency = (value) => {
 
 .cat-percentage {
   font-size: 0.8rem;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 700;
   text-align: right;
+  transition: color 0.3s;
 }
 
 .empty-state {
   text-align: center;
   padding: 40px 0;
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-weight: 500;
+  transition: color 0.3s;
 }
 
 .fw-700 { font-weight: 700; }

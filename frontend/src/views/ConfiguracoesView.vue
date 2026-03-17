@@ -27,12 +27,55 @@ const showToast = (message, type = 'error') => {
   toast.show = true
 }
 
-const loadProfile = async (token) => {
+const fetchWithAuth = async (url, options = {}) => {
+  let token = localStorage.getItem('access_token')
+  let headers = {
+    ...options.headers,
+    'Authorization': `Bearer ${token}`
+  }
+  
+  let response = await fetch(url, { ...options, headers })
+  
+  if (response.status === 401) {
+    const refreshToken = localStorage.getItem('refresh_token')
+    if (refreshToken) {
+      try {
+        const refreshResponse = await fetch('http://localhost:8000/api/auth/refresh/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh: refreshToken })
+        })
+        
+        if (refreshResponse.ok) {
+          const data = await refreshResponse.json()
+          localStorage.setItem('access_token', data.access)
+          headers['Authorization'] = `Bearer ${data.access}`
+          response = await fetch(url, { ...options, headers })
+        } else {
+          localStorage.removeItem('access_token')
+          localStorage.removeItem('refresh_token')
+          localStorage.removeItem('has_profile')
+          router.push('/')
+        }
+      } catch (e) {
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        localStorage.removeItem('has_profile')
+        router.push('/')
+      }
+    } else {
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      localStorage.removeItem('has_profile')
+      router.push('/')
+    }
+  }
+  return response
+}
+
+const loadProfile = async () => {
   try {
-    const response = await fetch('http://localhost:8000/api/finances/profile/', {
-      method: 'GET',
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
+    const response = await fetchWithAuth('http://localhost:8000/api/finances/profile/')
     
     if (response.ok) {
       const data = await response.json()
@@ -55,7 +98,7 @@ onMounted(() => {
     }, 1500)
   } else {
     isAuthorized.value = true
-    loadProfile(token)
+    loadProfile()
   }
 })
 
@@ -66,7 +109,6 @@ const saveProfile = async () => {
   }
 
   isSaving.value = true
-  const token = localStorage.getItem('access_token')
 
   const payload = {
     full_name: form.full_name,
@@ -75,10 +117,9 @@ const saveProfile = async () => {
   }
 
   try {
-    const response = await fetch('http://localhost:8000/api/finances/profile/', {
+    const response = await fetchWithAuth('http://localhost:8000/api/finances/profile/', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(payload)
@@ -86,7 +127,7 @@ const saveProfile = async () => {
 
     if (response.ok) {
       showToast('Perfil atualizado com sucesso!', 'success')
-      loadProfile(token)
+      loadProfile()
     } else {
       showToast('Erro ao salvar os dados do perfil.', 'error')
     }
@@ -164,17 +205,19 @@ const saveProfile = async () => {
 }
 
 .header-titles h1 {
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 2rem;
   font-weight: 800;
   margin: 0 0 4px 0;
   letter-spacing: -0.5px;
+  transition: color 0.3s;
 }
 
 .header-titles p {
-  color: #64748b;
+  color: var(--text-secondary);
   margin: 0;
   font-size: 1.05rem;
+  transition: color 0.3s;
 }
 
 .settings-container {
@@ -183,11 +226,12 @@ const saveProfile = async () => {
 }
 
 .settings-card {
-  background: white;
+  background: var(--bg-card);
   border-radius: 24px;
   padding: 45px 40px;
-  box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.05), 0 8px 10px -6px rgba(15, 23, 42, 0.02);
-  border: 1px solid #f1f5f9;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-color);
+  transition: background-color 0.3s, border-color 0.3s;
 }
 
 .card-header {
@@ -196,32 +240,36 @@ const saveProfile = async () => {
   gap: 20px;
   margin-bottom: 35px;
   padding-bottom: 25px;
-  border-bottom: 2px solid #f8fafc;
+  border-bottom: 2px solid var(--border-color);
+  transition: border-color 0.3s;
 }
 
 .header-icon {
   width: 60px;
   height: 60px;
-  background-color: #f8fafc;
+  background-color: var(--bg-main);
   color: #f7b500;
   border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background-color 0.3s;
 }
 
 .header-text h2 {
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 1.4rem;
   font-weight: 800;
   margin: 0 0 6px 0;
   letter-spacing: -0.5px;
+  transition: color 0.3s;
 }
 
 .header-text p {
-  color: #64748b;
+  color: var(--text-secondary);
   margin: 0;
   font-size: 1rem;
+  transition: color 0.3s;
 }
 
 .settings-form {
@@ -249,19 +297,20 @@ const saveProfile = async () => {
 .form-group label {
   font-size: 0.95rem;
   font-weight: 600;
-  color: #475569;
+  color: var(--text-secondary);
+  transition: color 0.3s;
 }
 
 .form-group input {
   padding: 16px;
-  border: 1px solid #cbd5e1;
-  background-color: #f8fafc;
+  border: 1px solid var(--border-input);
+  background-color: var(--input-bg);
   border-radius: 12px;
   font-size: 1rem;
   font-family: 'Inter', sans-serif;
   outline: none;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  color: #0f172a;
+  color: var(--text-primary);
 }
 
 .form-group input::placeholder {
@@ -271,7 +320,7 @@ const saveProfile = async () => {
 
 .form-group input:focus {
   border-color: #f7b500;
-  background-color: white;
+  background-color: var(--bg-card);
   box-shadow: 0 0 0 4px rgba(247, 181, 0, 0.1);
 }
 
@@ -302,8 +351,8 @@ const saveProfile = async () => {
 }
 
 .btn-save:disabled {
-  background: #e2e8f0;
-  color: #94a3b8;
+  background: var(--border-color);
+  color: var(--text-secondary);
   box-shadow: none;
   cursor: not-allowed;
   transform: none;

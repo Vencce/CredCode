@@ -37,6 +37,52 @@ const showToast = (message, type = 'error') => {
   toast.show = true
 }
 
+const fetchWithAuth = async (url, options = {}) => {
+  let token = localStorage.getItem('access_token')
+  let headers = {
+    ...options.headers,
+    'Authorization': `Bearer ${token}`
+  }
+  
+  let response = await fetch(url, { ...options, headers })
+  
+  if (response.status === 401) {
+    const refreshToken = localStorage.getItem('refresh_token')
+    if (refreshToken) {
+      try {
+        const refreshResponse = await fetch('http://localhost:8000/api/auth/refresh/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh: refreshToken })
+        })
+        
+        if (refreshResponse.ok) {
+          const data = await refreshResponse.json()
+          localStorage.setItem('access_token', data.access)
+          headers['Authorization'] = `Bearer ${data.access}`
+          response = await fetch(url, { ...options, headers })
+        } else {
+          localStorage.removeItem('access_token')
+          localStorage.removeItem('refresh_token')
+          localStorage.removeItem('has_profile')
+          router.push('/')
+        }
+      } catch (e) {
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        localStorage.removeItem('has_profile')
+        router.push('/')
+      }
+    } else {
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      localStorage.removeItem('has_profile')
+      router.push('/')
+    }
+  }
+  return response
+}
+
 const fetchMarketData = async () => {
   try {
     const response = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=brl&order=market_cap_desc&per_page=100&page=1&sparkline=false')
@@ -56,12 +102,10 @@ const fetchMarketData = async () => {
   }
 }
 
-const loadBalance = async (token) => {
+const loadBalance = async () => {
   try {
     let baseBalance = 0
-    const profileRes = await fetch('http://localhost:8000/api/finances/profile/', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
+    const profileRes = await fetchWithAuth('http://localhost:8000/api/finances/profile/')
     
     if (profileRes.ok) {
       const data = await profileRes.json()
@@ -70,9 +114,7 @@ const loadBalance = async (token) => {
       }
     }
 
-    const walletRes = await fetch('http://localhost:8000/api/finances/wallets/', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
+    const walletRes = await fetchWithAuth('http://localhost:8000/api/finances/wallets/')
     
     if (walletRes.ok) {
       const wallets = await walletRes.json()
@@ -84,9 +126,7 @@ const loadBalance = async (token) => {
       }
     }
 
-    const expensesRes = await fetch('http://localhost:8000/api/finances/expenses/', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
+    const expensesRes = await fetchWithAuth('http://localhost:8000/api/finances/expenses/')
 
     if (expensesRes.ok) {
       const expenses = await expensesRes.json()
@@ -148,7 +188,7 @@ onMounted(async () => {
     isAuthorized.value = true
     loadLocalCryptoWallet()
     await fetchMarketData()
-    await loadBalance(token)
+    await loadBalance()
     isLoading.value = false
   }
 })
@@ -219,7 +259,6 @@ const setSellAll = () => {
   }
 }
 
-
 const executeTrade = async () => {
   if (!selectedCoin.value) {
     showToast('Nenhuma moeda selecionada.', 'error')
@@ -271,7 +310,6 @@ const executeTrade = async () => {
     cryptoImpact = -Math.abs(amount)
   }
 
-  const token = localStorage.getItem('access_token')
   const description = tradeType.value === 'buy'
     ? `[Investimentos] Compra de ${coin.symbol}`
     : `[Investimentos] Venda de ${coin.symbol}`
@@ -285,10 +323,9 @@ const executeTrade = async () => {
   }
 
   try {
-    const response = await fetch('http://localhost:8000/api/finances/expenses/', {
+    const response = await fetchWithAuth('http://localhost:8000/api/finances/expenses/', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(payload)
@@ -321,7 +358,7 @@ const executeTrade = async () => {
       }
 
       saveLocalCryptoWallet()
-      await loadBalance(token)
+      await loadBalance()
       showToast('Ordem executada com sucesso!', 'success')
       closeTradeModal()
     } else {
@@ -394,7 +431,7 @@ const portfolioPerformance = computed(() => {
         </div>
       </div>
 
-            <section class="performance-section" v-if="portfolioPerformance.length > 0">
+      <section class="performance-section" v-if="portfolioPerformance.length > 0">
         <div class="section-header">
           <h2>Margem de Lucro por Moeda</h2>
         </div>
@@ -416,13 +453,13 @@ const portfolioPerformance = computed(() => {
             <div class="coin-cell">
               <img :src="item.image" :alt="item.name" class="mini-coin-logo" />
               <div>
-                <strong>{{ item.symbol }}</strong>
-                <p>{{ item.name }}</p>
+                <strong class="text-primary">{{ item.symbol }}</strong>
+                <p class="text-secondary-sub">{{ item.name }}</p>
               </div>
             </div>
 
-            <span>{{ formatCurrency(item.avgPrice) }}</span>
-            <span>{{ formatCurrency(item.currentPrice) }}</span>
+            <span class="text-primary">{{ formatCurrency(item.avgPrice) }}</span>
+            <span class="text-primary">{{ formatCurrency(item.currentPrice) }}</span>
 
             <span :class="item.profitLoss >= 0 ? 'text-positive' : 'text-negative'">
               {{ formatCurrency(item.profitLoss) }}
@@ -517,7 +554,7 @@ const portfolioPerformance = computed(() => {
         <div class="modal-header">
           <div class="modal-header-title">
             <img :src="selectedCoin?.image" class="modal-coin-logo" />
-              <h2>{{ tradeType === 'buy' ? 'Comprar' : 'Vender' }} {{ selectedCoin?.symbol }}</h2>
+            <h2>{{ tradeType === 'buy' ? 'Comprar' : 'Vender' }} {{ selectedCoin?.symbol }}</h2>
           </div>
           <button class="close-btn" @click="closeTradeModal">&times;</button>
         </div>
@@ -527,11 +564,11 @@ const portfolioPerformance = computed(() => {
           <div class="trade-info-box">
             <div class="trade-price-row">
               <span>Cotação atual:</span>
-              <span class="fw-700">{{ formatCurrency(selectedCoin?.price || 0) }}</span>
+              <span class="fw-700 text-primary">{{ formatCurrency(selectedCoin?.price || 0) }}</span>
             </div>
             <div class="trade-balance-row">
               <span>Disponível:</span>
-              <span class="fw-700">
+              <span class="fw-700 text-primary">
                 {{ tradeType === 'buy' 
                   ? formatCurrency(userData.balance) 
                   : formatCrypto(myCrypto[selectedCoin?.id]?.amount || 0, selectedCoin?.symbol || '')
@@ -586,38 +623,40 @@ const portfolioPerformance = computed(() => {
 }
 
 .header-titles h1 {
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 2rem;
   font-weight: 800;
   margin: 0 0 4px 0;
   letter-spacing: -0.5px;
+  transition: color 0.3s;
 }
 
 .header-titles p {
-  color: #64748b;
+  color: var(--text-secondary);
   margin: 0;
   font-size: 1.05rem;
+  transition: color 0.3s;
 }
 
 .btn-refresh {
   display: flex;
   align-items: center;
   gap: 8px;
-  background-color: white;
-  color: #0f172a;
-  border: 1px solid #cbd5e1;
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-input);
   padding: 12px 20px;
   border-radius: 12px;
   cursor: pointer;
   font-weight: 700;
   font-size: 0.95rem;
   transition: all 0.2s;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-refresh:hover {
-  background-color: #f8fafc;
-  border-color: #94a3b8;
+  background-color: var(--bg-main);
+  border-color: var(--text-secondary);
   transform: translateY(-2px);
 }
 
@@ -627,7 +666,7 @@ const portfolioPerformance = computed(() => {
   align-items: center;
   justify-content: center;
   padding: 80px 0;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 600;
   font-size: 1.1rem;
 }
@@ -635,7 +674,7 @@ const portfolioPerformance = computed(() => {
 .loader-spinner {
   width: 40px;
   height: 40px;
-  border: 4px solid #e2e8f0;
+  border: 4px solid var(--border-color);
   border-bottom-color: #f7b500;
   border-radius: 50%;
   margin-bottom: 20px;
@@ -657,7 +696,8 @@ const portfolioPerformance = computed(() => {
   flex: 1;
   padding: 35px 30px;
   border-radius: 24px;
-  box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.05);
+  box-shadow: var(--shadow-lg);
+  transition: background-color 0.3s, border-color 0.3s;
 }
 
 .primary-card {
@@ -666,8 +706,8 @@ const portfolioPerformance = computed(() => {
 }
 
 .secondary-card {
-  background: white;
-  border: 1px solid #f1f5f9;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
 }
 
 .overview-card h3 {
@@ -679,7 +719,7 @@ const portfolioPerformance = computed(() => {
 }
 
 .primary-card h3 { color: #94a3b8; }
-.secondary-card h3 { color: #64748b; }
+.secondary-card h3 { color: var(--text-secondary); transition: color 0.3s; }
 
 .amount-huge {
   font-size: 2.8rem;
@@ -689,14 +729,15 @@ const portfolioPerformance = computed(() => {
 }
 
 .primary-card .amount-huge { color: #f7b500; }
-.secondary-card .amount-huge { color: #0f172a; }
+.secondary-card .amount-huge { color: var(--text-primary); transition: color 0.3s; }
 
 .amount-medium {
   font-size: 2.2rem;
   font-weight: 800;
   margin: 0 0 5px 0;
   letter-spacing: -0.5px;
-  color: #0f172a;
+  color: var(--text-primary);
+  transition: color 0.3s;
 }
 
 .subtitle {
@@ -705,7 +746,7 @@ const portfolioPerformance = computed(() => {
 }
 
 .primary-card .subtitle { color: #cbd5e1; }
-.secondary-card .subtitle { color: #94a3b8; }
+.secondary-card .subtitle { color: var(--text-secondary); transition: color 0.3s; }
 
 .dashboard-grid {
   display: grid;
@@ -730,14 +771,15 @@ const portfolioPerformance = computed(() => {
 }
 
 .section-header h2 {
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 1.4rem;
   font-weight: 800;
   margin: 0;
+  transition: color 0.3s;
 }
 
 .live-badge {
-  background-color: #ecfdf5;
+  background-color: var(--positive-bg);
   color: #059669;
   padding: 6px 12px;
   border-radius: 20px;
@@ -757,24 +799,25 @@ const portfolioPerformance = computed(() => {
   left: 12px;
   top: 50%;
   transform: translateY(-50%);
-  color: #94a3b8;
+  color: var(--text-secondary);
 }
 
 .market-search {
   width: 100%;
   padding: 10px 15px 10px 40px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-input);
   border-radius: 12px;
   font-size: 0.95rem;
   outline: none;
   font-family: 'Inter', sans-serif;
   transition: all 0.3s;
-  background-color: #f8fafc;
+  background-color: var(--input-bg);
+  color: var(--text-primary);
 }
 
 .market-search:focus {
   border-color: #f7b500;
-  background-color: white;
+  background-color: var(--bg-card);
   box-shadow: 0 0 0 3px rgba(247, 181, 0, 0.1);
 }
 
@@ -792,24 +835,24 @@ const portfolioPerformance = computed(() => {
 }
 
 .asset-grid::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1;
+  background-color: var(--border-input);
   border-radius: 4px;
 }
 
 .asset-card {
-  background: white;
+  background: var(--bg-card);
   border-radius: 20px;
   padding: 22px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.02);
-  border: 1px solid #f1f5f9;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform 0.2s, box-shadow 0.2s, background-color 0.3s, border-color 0.3s;
 }
 
 .asset-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-lg);
 }
 
 .asset-info {
@@ -828,14 +871,16 @@ const portfolioPerformance = computed(() => {
 .asset-title h3 {
   margin: 0 0 2px 0;
   font-size: 1.2rem;
-  color: #0f172a;
+  color: var(--text-primary);
   font-weight: 900;
+  transition: color 0.3s;
 }
 
 .asset-name {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.85rem;
   font-weight: 500;
+  transition: color 0.3s;
 }
 
 .asset-price-box {
@@ -845,8 +890,9 @@ const portfolioPerformance = computed(() => {
 .asset-price {
   font-size: 1.5rem;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--text-primary);
   margin: 0 0 5px 0;
+  transition: color 0.3s;
 }
 
 .asset-change {
@@ -857,6 +903,8 @@ const portfolioPerformance = computed(() => {
 
 .text-positive { color: #059669; }
 .text-negative { color: #dc2626; }
+.text-primary { color: var(--text-primary); }
+.text-secondary-sub { margin: 2px 0 0 0; color: var(--text-secondary); font-size: 0.84rem; }
 
 .btn-trade {
   width: 100%;
@@ -883,11 +931,12 @@ const portfolioPerformance = computed(() => {
 .empty-market, .empty-wallet {
   text-align: center;
   padding: 40px;
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-weight: 500;
-  background: white;
+  background: var(--bg-card);
   border-radius: 20px;
-  border: 1px solid #f1f5f9;
+  border: 1px solid var(--border-color);
+  transition: background-color 0.3s, border-color 0.3s, color 0.3s;
 }
 
 .my-coins-list {
@@ -897,18 +946,18 @@ const portfolioPerformance = computed(() => {
 }
 
 .my-coin-card {
-  background: white;
+  background: var(--bg-card);
   padding: 20px;
   border-radius: 16px;
-  border: 1px solid #f1f5f9;
+  border: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  transition: box-shadow 0.2s;
+  transition: box-shadow 0.2s, background-color 0.3s, border-color 0.3s;
 }
 
 .my-coin-card:hover {
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.03);
+  box-shadow: var(--shadow-md);
 }
 
 .my-coin-left {
@@ -931,14 +980,16 @@ const portfolioPerformance = computed(() => {
 
 .my-coin-symbol {
   font-weight: 800;
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 1rem;
+  transition: color 0.3s;
 }
 
 .my-coin-amount {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.85rem;
   font-weight: 500;
+  transition: color 0.3s;
 }
 
 .my-coin-value {
@@ -950,8 +1001,9 @@ const portfolioPerformance = computed(() => {
 
 .fiat-value {
   font-weight: 800;
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 1.05rem;
+  transition: color 0.3s;
 }
 
 .btn-trade-small {
@@ -965,17 +1017,17 @@ const portfolioPerformance = computed(() => {
 }
 
 .btn-sell {
-  background-color: #fef2f2;
+  background-color: var(--negative-bg);
   color: #dc2626;
 }
 
 .btn-sell:hover:not(:disabled) {
-  background-color: #fee2e2;
+  opacity: 0.8;
 }
 
 .btn-sell:disabled {
-  background-color: #f1f5f9;
-  color: #94a3b8;
+  background-color: var(--bg-main);
+  color: var(--text-secondary);
   cursor: not-allowed;
 }
 
@@ -985,7 +1037,7 @@ const portfolioPerformance = computed(() => {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(15, 23, 42, 0.7);
+  background-color: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(5px);
   display: flex;
   justify-content: center;
@@ -994,13 +1046,15 @@ const portfolioPerformance = computed(() => {
 }
 
 .modal-container {
-  background: white;
+  background: var(--bg-card);
   width: 100%;
   max-width: 450px;
   border-radius: 24px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-color);
   padding: 35px;
   animation: modalSlideIn 0.3s ease-out;
+  transition: background-color 0.3s, border-color 0.3s;
 }
 
 @keyframes modalSlideIn {
@@ -1029,19 +1083,20 @@ const portfolioPerformance = computed(() => {
 
 .modal-header h2 {
   margin: 0;
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 1.4rem;
   font-weight: 800;
+  transition: color 0.3s;
 }
 
 .close-btn {
-  background: #f1f5f9;
+  background: var(--bg-main);
   border: none;
   width: 36px;
   height: 36px;
   border-radius: 50%;
   font-size: 1.5rem;
-  color: #64748b;
+  color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1051,12 +1106,12 @@ const portfolioPerformance = computed(() => {
 }
 
 .close-btn:hover {
-  background: #e2e8f0;
-  color: #0f172a;
+  background: var(--border-color);
+  color: var(--text-primary);
 }
 
 .trade-info-box {
-  background-color: #f8fafc;
+  background-color: var(--neutral-bg);
   padding: 15px 20px;
   border-radius: 12px;
   margin-bottom: 20px;
@@ -1064,7 +1119,8 @@ const portfolioPerformance = computed(() => {
   flex-direction: column;
   gap: 8px;
   font-size: 0.95rem;
-  color: #475569;
+  color: var(--text-secondary);
+  transition: background-color 0.3s, color 0.3s;
 }
 
 .trade-price-row, .trade-balance-row {
@@ -1072,7 +1128,7 @@ const portfolioPerformance = computed(() => {
   justify-content: space-between;
 }
 
-.fw-700 { font-weight: 700; color: #0f172a; }
+.fw-700 { font-weight: 700; color: var(--text-primary); transition: color 0.3s; }
 
 .modal-form {
   display: flex;
@@ -1095,7 +1151,8 @@ const portfolioPerformance = computed(() => {
 .form-group label {
   font-size: 0.95rem;
   font-weight: 600;
-  color: #475569;
+  color: var(--text-secondary);
+  transition: color 0.3s;
 }
 
 .btn-sell-all {
@@ -1114,40 +1171,44 @@ const portfolioPerformance = computed(() => {
 
 .form-group input {
   padding: 16px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-input);
   border-radius: 12px;
   font-size: 1.1rem;
   font-family: 'Inter', sans-serif;
   outline: none;
-  background-color: white;
-  color: #0f172a;
+  background-color: var(--input-bg);
+  color: var(--text-primary);
   transition: all 0.3s;
 }
 
 .form-group input:focus {
   border-color: #f7b500;
+  background-color: var(--bg-card);
   box-shadow: 0 0 0 4px rgba(247, 181, 0, 0.1);
 }
 
 .conversion-result {
   text-align: center;
   padding: 15px;
-  background-color: #f8fafc;
+  background-color: var(--neutral-bg);
   border-radius: 12px;
-  border: 1px dashed #cbd5e1;
+  border: 1px dashed var(--border-input);
+  transition: background-color 0.3s, border-color 0.3s;
 }
 
 .conversion-result p {
   margin: 0 0 5px 0;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.9rem;
+  transition: color 0.3s;
 }
 
 .conversion-result h3 {
   margin: 0;
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 1.3rem;
   font-weight: 800;
+  transition: color 0.3s;
 }
 
 .modal-actions {
@@ -1159,17 +1220,17 @@ const portfolioPerformance = computed(() => {
 .btn-cancel {
   flex: 1;
   padding: 16px;
-  background-color: #f1f5f9;
-  color: #475569;
-  border: none;
+  background-color: var(--bg-main);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   font-weight: 700;
   font-size: 1rem;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s;
 }
 
-.btn-cancel:hover { background-color: #e2e8f0; }
+.btn-cancel:hover { background-color: var(--border-color); color: var(--text-primary); }
 
 .btn-save {
   flex: 1;
@@ -1185,43 +1246,17 @@ const portfolioPerformance = computed(() => {
 
 .btn-save:hover { transform: translateY(-2px); }
 
-.bg-positive { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
-.bg-negative { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
-
-@media (max-width: 1024px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 768px) {
-  .page-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 15px;
-  }
-  
-  .btn-refresh { width: 100%; justify-content: center; }
-  
-  .portfolio-overview {
-    flex-direction: column;
-  }
-
-  .search-wrapper {
-    width: 100%;
-  }
-}
-
 .performance-section {
   margin-bottom: 35px;
 }
 
 .performance-card {
-  background: white;
+  background: var(--bg-card);
   border-radius: 20px;
   padding: 24px;
-  border: 1px solid #f1f5f9;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.02);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+  transition: background-color 0.3s, border-color 0.3s;
 }
 
 .performance-table-head,
@@ -1235,16 +1270,18 @@ const portfolioPerformance = computed(() => {
 .performance-table-head {
   padding-bottom: 14px;
   margin-bottom: 10px;
-  border-bottom: 1px solid #e2e8f0;
-  color: #64748b;
+  border-bottom: 1px solid var(--border-input);
+  color: var(--text-secondary);
   font-size: 0.82rem;
   font-weight: 700;
   text-transform: uppercase;
+  transition: color 0.3s, border-color 0.3s;
 }
 
 .performance-row {
   padding: 16px 0;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--border-color);
+  transition: border-color 0.3s;
 }
 
 .performance-row:last-child {
@@ -1255,12 +1292,6 @@ const portfolioPerformance = computed(() => {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-
-.coin-cell p {
-  margin: 2px 0 0 0;
-  color: #64748b;
-  font-size: 0.84rem;
 }
 
 .mini-coin-logo {
@@ -1278,9 +1309,10 @@ const portfolioPerformance = computed(() => {
 .performance-bar-bg {
   flex: 1;
   height: 10px;
-  background: #f1f5f9;
+  background: var(--border-color);
   border-radius: 999px;
   overflow: hidden;
+  transition: background-color 0.3s;
 }
 
 .performance-bar-fill {
@@ -1297,19 +1329,24 @@ const portfolioPerformance = computed(() => {
 }
 
 @media (max-width: 1024px) {
+  .dashboard-grid { grid-template-columns: 1fr; }
   .performance-table-head,
   .performance-row {
     grid-template-columns: 1fr;
   }
-
   .performance-table-head {
     display: none;
   }
-
   .performance-row {
     gap: 8px;
     padding: 18px 0;
   }
 }
 
+@media (max-width: 768px) {
+  .page-header { flex-direction: column; align-items: flex-start; gap: 15px; }
+  .btn-refresh { width: 100%; justify-content: center; }
+  .portfolio-overview { flex-direction: column; }
+  .search-wrapper { width: 100%; }
+}
 </style>

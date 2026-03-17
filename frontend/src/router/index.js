@@ -49,6 +49,12 @@ const router = createRouter({
       component: () => import('../views/RelatoriosView.vue'),
       meta: { requiresAuth: true }
     },
+    {
+      path: '/gastos-futuros',
+      name: 'gastos-futuros',
+      component: () => import('../views/GastosFuturosView.vue'),
+      meta: { requiresAuth: true }
+    },
   ],
 })
 

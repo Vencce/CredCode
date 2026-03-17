@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, reactive, computed, nextTick, shallowRef } from 'vue'
+import { ref, onMounted, onUnmounted, reactive, computed, nextTick, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import ToastMessage from '../components/ToastMessage.vue'
@@ -22,13 +22,15 @@ const userData = reactive({
   expenses: 0
 })
 
+const displayedBalance = ref(0)
+const totalBalance = computed(() => userData.balance + userData.income - userData.expenses)
+
 const recentTransactions = ref([])
 const defaultWalletId = ref(null)
 
 const showModal = ref(false)
 const modalType = ref('expense')
 
-// IMPORTANTE: ECharts DEVE usar shallowRef no Vue 3 para não quebrar a aplicação
 const chartRef = ref(null)
 const chartInstance = shallowRef(null) 
 
@@ -50,13 +52,45 @@ const showToast = (message, type = 'error') => {
   toast.show = true
 }
 
-// Lógica Segura do Gráfico ECharts
+const animateValue = (start, end, duration) => {
+  let startTimestamp = null
+  const step = (timestamp) => {
+    if (!startTimestamp) startTimestamp = timestamp
+    const progress = Math.min((timestamp - startTimestamp) / duration, 1)
+    const easeOutQuart = 1 - Math.pow(1 - progress, 4)
+    displayedBalance.value = start + (end - start) * easeOutQuart
+    if (progress < 1) {
+      window.requestAnimationFrame(step)
+    } else {
+      displayedBalance.value = end
+    }
+  }
+  window.requestAnimationFrame(step)
+}
+
+watch(totalBalance, (newVal) => {
+  animateValue(0, newVal, 1500)
+})
+
+const handleThemeChange = () => {
+  if (chartInstance.value) {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    chartInstance.value.setOption({
+      legend: {
+        textStyle: { color: isDark ? '#94a3b8' : '#64748b' }
+      }
+    })
+  }
+}
+
 const initChart = () => {
   if (!chartRef.value) return
   
   if (!chartInstance.value) {
     chartInstance.value = echarts.init(chartRef.value)
   }
+
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
 
   const option = {
     tooltip: {
@@ -66,9 +100,9 @@ const initChart = () => {
     legend: {
       bottom: '5%',
       left: 'center',
-      textStyle: { color: '#64748b', fontWeight: 600 }
+      textStyle: { color: isDark ? '#94a3b8' : '#64748b', fontWeight: 600 }
     },
-    color: ['#10b981', '#ef4444'], // Verde e Vermelho
+    color: ['#10b981', '#ef4444'], 
     series: [
       {
         name: 'Movimentações',
@@ -77,12 +111,12 @@ const initChart = () => {
         avoidLabelOverlap: false,
         itemStyle: {
           borderRadius: 10,
-          borderColor: '#fff',
+          borderColor: isDark ? '#0f172a' : '#fff',
           borderWidth: 4
         },
         label: { show: false, position: 'center' },
         emphasis: {
-          label: { show: true, fontSize: 18, fontWeight: 'bold', color: '#0f172a' }
+          label: { show: true, fontSize: 18, fontWeight: 'bold', color: isDark ? '#f8fafc' : '#0f172a' }
         },
         labelLine: { show: false },
         data: [
@@ -102,14 +136,57 @@ const handleResize = () => {
   }
 }
 
-const loadData = async (token) => {
+const fetchWithAuth = async (url, options = {}) => {
+  let token = localStorage.getItem('access_token')
+  let headers = {
+    ...options.headers,
+    'Authorization': `Bearer ${token}`
+  }
+  
+  let response = await fetch(url, { ...options, headers })
+  
+  if (response.status === 401) {
+    const refreshToken = localStorage.getItem('refresh_token')
+    if (refreshToken) {
+      try {
+        const refreshResponse = await fetch('http://localhost:8000/api/auth/refresh/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh: refreshToken })
+        })
+        
+        if (refreshResponse.ok) {
+          const data = await refreshResponse.json()
+          localStorage.setItem('access_token', data.access)
+          headers['Authorization'] = `Bearer ${data.access}`
+          response = await fetch(url, { ...options, headers })
+        } else {
+          localStorage.removeItem('access_token')
+          localStorage.removeItem('refresh_token')
+          localStorage.removeItem('has_profile')
+          router.push('/')
+        }
+      } catch (e) {
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        localStorage.removeItem('has_profile')
+        router.push('/')
+      }
+    } else {
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      localStorage.removeItem('has_profile')
+      router.push('/')
+    }
+  }
+  return response
+}
+
+const loadData = async () => {
   try {
     let baseBalance = 0
     
-    const profileRes = await fetch('http://localhost:8000/api/finances/profile/', {
-      method: 'GET',
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
+    const profileRes = await fetchWithAuth('http://localhost:8000/api/finances/profile/')
     
     if (profileRes.ok) {
       const data = await profileRes.json()
@@ -119,9 +196,7 @@ const loadData = async (token) => {
       }
     }
 
-    const walletRes = await fetch('http://localhost:8000/api/finances/wallets/', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
+    const walletRes = await fetchWithAuth('http://localhost:8000/api/finances/wallets/')
     
     if (walletRes.ok) {
       const wallets = await walletRes.json()
@@ -131,12 +206,9 @@ const loadData = async (token) => {
           baseBalance = parseFloat(wallets[0].balance) || 0
         }
       } else {
-        const createWalletRes = await fetch('http://localhost:8000/api/finances/wallets/', {
+        const createWalletRes = await fetchWithAuth('http://localhost:8000/api/finances/wallets/', {
           method: 'POST',
-          headers: { 
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: 'Carteira Principal', balance: baseBalance })
         })
         if (createWalletRes.ok) {
@@ -148,9 +220,7 @@ const loadData = async (token) => {
 
     userData.balance = baseBalance
 
-    const expensesRes = await fetch('http://localhost:8000/api/finances/expenses/', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
+    const expensesRes = await fetchWithAuth('http://localhost:8000/api/finances/expenses/')
 
     if (expensesRes.ok) {
       const expenses = await expensesRes.json()
@@ -179,7 +249,6 @@ const loadData = async (token) => {
       userData.income = totalInc
       userData.expenses = totalExp
 
-      // Chama o gráfico logo após atualizar os dados de income e expenses
       nextTick(() => {
         if (userData.income > 0 || userData.expenses > 0) {
           initChart()
@@ -202,13 +271,15 @@ onMounted(() => {
     }, 1500)
   } else {
     isAuthorized.value = true
-    loadData(token)
+    loadData()
     window.addEventListener('resize', handleResize)
+    window.addEventListener('theme-changed', handleThemeChange)
   }
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+  window.removeEventListener('theme-changed', handleThemeChange)
   if (chartInstance.value) {
     chartInstance.value.dispose()
     chartInstance.value = null
@@ -239,7 +310,6 @@ const saveTransaction = async () => {
     return
   }
 
-  const token = localStorage.getItem('access_token')
   let finalAmount = parseFloat(form.amount)
   
   if (modalType.value === 'expense') {
@@ -256,19 +326,16 @@ const saveTransaction = async () => {
   }
 
   try {
-    const response = await fetch('http://localhost:8000/api/finances/expenses/', {
+    const response = await fetchWithAuth('http://localhost:8000/api/finances/expenses/', {
       method: 'POST',
-      headers: { 
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     })
 
     if (response.ok) {
       showToast('Transação registrada com sucesso!', 'success')
       closeModal()
-      loadData(token) // Recarrega os dados e atualiza o gráfico
+      loadData() 
     } else {
       showToast('Erro ao salvar os dados da transação.', 'error')
     }
@@ -305,7 +372,7 @@ const currentCategories = computed(() => {
           <div class="balance-card-primary">
             <div class="balance-info">
               <h3>Saldo Atual</h3>
-              <p class="amount-huge">{{ formatCurrency(userData.balance + userData.income - userData.expenses) }}</p>
+              <p class="amount-huge">{{ formatCurrency(displayedBalance) }}</p>
             </div>
             <div class="balance-decoration">
               <div class="circle circle-1"></div>
@@ -357,7 +424,9 @@ const currentCategories = computed(() => {
         </section>
       </div>
 
-    </div> <section class="recent-transactions">
+    </div> 
+    
+    <section class="recent-transactions">
       <div class="section-title-wrapper">
         <h2>Transações Recentes</h2>
       </div>
@@ -448,17 +517,19 @@ const currentCategories = computed(() => {
 }
 
 .header-greeting h1 {
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 2rem;
   font-weight: 800;
   margin: 0 0 4px 0;
   letter-spacing: -0.5px;
+  transition: color 0.3s;
 }
 
 .header-greeting p {
-  color: #64748b;
+  color: var(--text-secondary);
   margin: 0;
   font-size: 1.05rem;
+  transition: color 0.3s;
 }
 
 .dashboard-grid {
@@ -483,7 +554,7 @@ const currentCategories = computed(() => {
   color: white;
   padding: 45px 40px;
   border-radius: 24px;
-  box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.2), 0 8px 10px -6px rgba(15, 23, 42, 0.1);
+  box-shadow: var(--shadow-lg);
   position: relative;
   overflow: hidden;
   display: flex;
@@ -497,7 +568,7 @@ const currentCategories = computed(() => {
 }
 
 .balance-card-primary h3 {
-  color: #94a3b8;
+  color: #cbd5e1;
   font-size: 1.1rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -545,33 +616,34 @@ const currentCategories = computed(() => {
   right: 150px;
 }
 
-/* Container do ECharts com Altura Fixa Obrigatória */
 .charts-section {
   width: 100%;
   height: 100%;
 }
 
 .chart-card {
-  background: white;
+  background: var(--bg-card);
   border-radius: 24px;
   padding: 25px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -4px rgba(0, 0, 0, 0.02);
-  border: 1px solid #f1f5f9;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
   height: 100%;
   display: flex;
   flex-direction: column;
+  transition: background-color 0.3s, border-color 0.3s;
 }
 
 .chart-card h3 {
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 1.2rem;
   font-weight: 800;
   margin: 0 0 15px 0;
+  transition: color 0.3s;
 }
 
 .echarts-container {
   width: 100%;
-  height: 320px; /* IMPORTANTE: Fixar a altura para o ECharts renderizar */
+  height: 320px;
   display: block;
 }
 
@@ -580,7 +652,7 @@ const currentCategories = computed(() => {
   align-items: center;
   justify-content: center;
   flex: 1;
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-weight: 500;
   min-height: 320px;
 }
@@ -592,20 +664,20 @@ const currentCategories = computed(() => {
 }
 
 .card {
-  background: white;
+  background: var(--bg-card);
   padding: 25px 30px;
   border-radius: 20px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -4px rgba(0, 0, 0, 0.02);
-  border: 1px solid #f1f5f9;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   gap: 20px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.3s, border-color 0.3s;
 }
 
 .card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+  box-shadow: var(--shadow-lg);
 }
 
 .card-icon-wrapper {
@@ -618,12 +690,12 @@ const currentCategories = computed(() => {
 }
 
 .positive-bg {
-  background-color: #ecfdf5;
+  background-color: var(--positive-bg);
   color: #10b981;
 }
 
 .negative-bg {
-  background-color: #fef2f2;
+  background-color: var(--negative-bg);
   color: #ef4444;
 }
 
@@ -633,12 +705,13 @@ const currentCategories = computed(() => {
 }
 
 .card-data h3 {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.95rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin: 0 0 8px 0;
+  transition: color 0.3s;
 }
 
 .amount {
@@ -701,23 +774,26 @@ const currentCategories = computed(() => {
 .section-title-wrapper {
   margin-bottom: 20px;
   padding-bottom: 10px;
-  border-bottom: 2px solid #f1f5f9;
+  border-bottom: 2px solid var(--border-color);
+  transition: border-color 0.3s;
 }
 
 .recent-transactions h2 {
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 1.4rem;
   font-weight: 800;
   margin: 0;
+  transition: color 0.3s;
 }
 
 .table-container {
-  background: white;
+  background: var(--bg-card);
   border-radius: 20px;
   padding: 10px 25px 25px 25px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.02), 0 4px 6px -4px rgba(0, 0, 0, 0.01);
-  border: 1px solid #f1f5f9;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
   overflow-x: auto;
+  transition: background-color 0.3s, border-color 0.3s;
 }
 
 .transaction-table {
@@ -730,21 +806,24 @@ const currentCategories = computed(() => {
 .transaction-table th, .transaction-table td {
   padding: 18px 15px;
   text-align: left;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--border-color);
+  transition: border-color 0.3s;
 }
 
 .transaction-table th {
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 600;
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding-top: 25px;
+  transition: color 0.3s;
 }
 
 .transaction-table td {
-  color: #334155;
+  color: var(--text-primary);
   font-size: 1rem;
+  transition: color 0.3s;
 }
 
 .transaction-table tr:last-child td {
@@ -756,22 +835,22 @@ const currentCategories = computed(() => {
 }
 
 .transaction-table tr:hover td {
-  background-color: #f8fafc;
+  background-color: var(--bg-main);
 }
 
 .td-date {
-  color: #64748b !important;
+  color: var(--text-secondary) !important;
   font-size: 0.95rem !important;
 }
 
 .td-desc {
-  color: #0f172a !important;
+  color: var(--text-primary) !important;
 }
 
 .empty-state {
   text-align: center !important;
   padding: 50px !important;
-  color: #94a3b8 !important;
+  color: var(--text-secondary) !important;
   font-weight: 500;
 }
 
@@ -788,8 +867,15 @@ const currentCategories = computed(() => {
   font-weight: 600;
 }
 
-.type-badge.income { background-color: #ecfdf5; color: #059669; }
-.type-badge.expense { background-color: #fef2f2; color: #dc2626; }
+.type-badge.income {
+  background-color: var(--positive-bg);
+  color: #059669;
+}
+
+.type-badge.expense {
+  background-color: var(--negative-bg);
+  color: #dc2626;
+}
 
 .modal-overlay {
   position: fixed;
@@ -797,7 +883,7 @@ const currentCategories = computed(() => {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(15, 23, 42, 0.7);
+  background-color: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(5px);
   display: flex;
   justify-content: center;
@@ -806,14 +892,16 @@ const currentCategories = computed(() => {
 }
 
 .modal-container {
-  background: white;
+  background: var(--bg-card);
   width: 100%;
   max-width: 480px;
   border-radius: 24px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-color);
   padding: 35px;
   transform: translateY(0);
   animation: modalSlideIn 0.3s ease-out;
+  transition: background-color 0.3s, border-color 0.3s;
 }
 
 @keyframes modalSlideIn {
@@ -830,19 +918,20 @@ const currentCategories = computed(() => {
 
 .modal-header h2 {
   margin: 0;
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 1.5rem;
   font-weight: 800;
+  transition: color 0.3s;
 }
 
 .close-btn {
-  background: #f1f5f9;
+  background: var(--bg-main);
   border: none;
   width: 36px;
   height: 36px;
   border-radius: 50%;
   font-size: 1.2rem;
-  color: #64748b;
+  color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -851,8 +940,8 @@ const currentCategories = computed(() => {
 }
 
 .close-btn:hover {
-  background: #e2e8f0;
-  color: #0f172a;
+  background: var(--border-color);
+  color: var(--text-primary);
 }
 
 .modal-form {
@@ -876,24 +965,25 @@ const currentCategories = computed(() => {
 .form-group label {
   font-size: 0.95rem;
   font-weight: 600;
-  color: #475569;
+  color: var(--text-secondary);
+  transition: color 0.3s;
 }
 
 .form-group input, .form-group select {
   padding: 16px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-input);
   border-radius: 12px;
   font-size: 1rem;
   font-family: 'Inter', sans-serif;
   outline: none;
-  transition: border-color 0.3s, box-shadow 0.3s;
-  background-color: #f8fafc;
-  color: #0f172a;
+  transition: border-color 0.3s, box-shadow 0.3s, background-color 0.3s, color 0.3s;
+  background-color: var(--input-bg);
+  color: var(--text-primary);
 }
 
 .form-group input:focus, .form-group select:focus {
   border-color: #f7b500;
-  background-color: white;
+  background-color: var(--bg-card);
   box-shadow: 0 0 0 4px rgba(247, 181, 0, 0.1);
 }
 
@@ -906,17 +996,20 @@ const currentCategories = computed(() => {
 .btn-cancel {
   flex: 1;
   padding: 16px;
-  background-color: #f1f5f9;
-  color: #475569;
-  border: none;
+  background-color: var(--bg-main);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   font-weight: 700;
   font-size: 1rem;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s;
 }
 
-.btn-cancel:hover { background-color: #e2e8f0; }
+.btn-cancel:hover { 
+  background-color: var(--border-color); 
+  color: var(--text-primary);
+}
 
 .btn-save {
   flex: 1;
