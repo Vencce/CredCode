@@ -5,8 +5,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import User
-from .serializers import RegisterSerializer, WalletSerializer, ExpenseSerializer, ProfileSerializer
-from .models import Wallet, Expense, Profile
+from .serializers import RegisterSerializer, WalletSerializer, ExpenseSerializer, ProfileSerializer, BudgetSerializer, CategorySerializer, GoalSerializer, InvestmentSerializer
+from .models import Wallet, Expense, Profile, Budget, Category, Goal, Investment
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -23,12 +23,49 @@ class WalletViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
+class CategoryViewSet(viewsets.ModelViewSet):
+    serializer_class = CategorySerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        return Category.objects.filter(user=self.request.user)
+        
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
 class ExpenseViewSet(viewsets.ModelViewSet):
     serializer_class = ExpenseSerializer
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
         return Expense.objects.filter(wallet__user=self.request.user)
+
+class BudgetViewSet(viewsets.ModelViewSet):
+    serializer_class = BudgetSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        return Budget.objects.filter(wallet__user=self.request.user)
+
+class GoalViewSet(viewsets.ModelViewSet):
+    serializer_class = GoalSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        return Goal.objects.filter(user=self.request.user)
+        
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+class InvestmentViewSet(viewsets.ModelViewSet):
+    serializer_class = InvestmentSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        return Investment.objects.filter(user=self.request.user)
+        
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
 class ProfileView(APIView):
     permission_classes = [IsAuthenticated]

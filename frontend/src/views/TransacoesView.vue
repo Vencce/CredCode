@@ -16,6 +16,7 @@ const toast = reactive({
 
 const transactions = ref([])
 const defaultWalletId = ref(null)
+const userCategories = ref([])
 
 const showModal = ref(false)
 const modalType = ref('expense')
@@ -24,22 +25,20 @@ const editingId = ref(null)
 const showDeleteModal = ref(false)
 const itemToDelete = ref(null)
 
-const predefinedCategories = {
-  income: ['Salário', 'Investimentos', 'Vendas', 'Serviços', 'Outros'],
-  expense: ['Alimentação', 'Transporte', 'Moradia', 'Contas', 'Saúde', 'Lazer', 'Outros']
-}
-
 const form = reactive({
   description: '',
   amount: '',
   date: new Date().toISOString().split('T')[0],
-  category: ''
+  category: '',
+  isMonthly: false,
+  monthsCount: 12
 })
 
 const filters = reactive({
   search: '',
   type: 'all',
-  period: 'all'
+  period: 'all',
+  category: 'all'
 })
 
 const showToast = (message, type = 'error') => {
@@ -119,17 +118,13 @@ const loadData = async () => {
           rawDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2].substring(0, 2)))
         }
 
-        let cat = item.category || 'Outros'
+        let cat = item.category || 'Geral'
         let desc = item.description || 'Sem descrição'
 
-        // Tratamento de segurança para limpar colchetes de registros antigos
         if (desc.startsWith('[')) {
           const closingBracket = desc.indexOf(']')
           if (closingBracket !== -1) {
-            // Se por acaso o item não tiver categoria no backend ainda, puxa do colchete
-            if (!item.category) {
-              cat = desc.substring(1, closingBracket)
-            }
+            cat = desc.substring(1, closingBracket)
             desc = desc.substring(closingBracket + 1).trim()
           }
         }
@@ -144,6 +139,11 @@ const loadData = async () => {
           rawDate: rawDate
         }
       }).reverse()
+    }
+
+    const catRes = await fetchWithAuth('http://localhost:8000/api/finances/categories/')
+    if (catRes.ok) {
+      userCategories.value = await catRes.json()
     }
 
   } catch (error) {
@@ -165,6 +165,11 @@ onMounted(() => {
   }
 })
 
+const uniqueCategories = computed(() => {
+  const cats = new Set(transactions.value.map(t => t.category))
+  return Array.from(cats).sort()
+})
+
 const filteredTransactions = computed(() => {
   const now = new Date()
   now.setHours(0, 0, 0, 0)
@@ -174,6 +179,7 @@ const filteredTransactions = computed(() => {
     const matchesSearch = t.description.toLowerCase().includes(searchString) ||
       t.category.toLowerCase().includes(searchString)
     const matchesType = filters.type === 'all' || t.type === filters.type
+    const matchesCategory = filters.category === 'all' || t.category === filters.category
     
     let matchesPeriod = true
     if (filters.period !== 'all') {
@@ -185,7 +191,7 @@ const filteredTransactions = computed(() => {
       matchesPeriod = diffDays >= 0 && diffDays <= days
     }
 
-    return matchesSearch && matchesType && matchesPeriod
+    return matchesSearch && matchesType && matchesPeriod && matchesCategory
   })
 })
 
@@ -281,7 +287,9 @@ const formatCurrency = (value) => {
 }
 
 const currentCategories = computed(() => {
-  return modalType.value === 'income' ? predefinedCategories.income : predefinedCategories.expense
+  return userCategories.value
+    .filter(c => c.type === modalType.value)
+    .map(c => c.name)
 })
 
 const openModal = (type, item = null) => {
@@ -292,6 +300,8 @@ const openModal = (type, item = null) => {
     form.description = item.description
     form.amount = Math.abs(item.amount)
     form.category = item.category
+    form.isMonthly = false
+    form.monthsCount = 12
     
     const dateParts = item.date.split('/')
     if (dateParts.length === 3) {
@@ -305,6 +315,8 @@ const openModal = (type, item = null) => {
     form.amount = ''
     form.category = ''
     form.date = new Date().toISOString().split('T')[0]
+    form.isMonthly = false
+    form.monthsCount = 12
   }
   
   showModal.value = true
@@ -334,36 +346,61 @@ const saveTransaction = async () => {
     finalAmount = Math.abs(finalAmount)
   }
 
-  // AGORA ENVIAMOS A CATEGORIA SEPARADAMENTE
-  const payload = {
-    wallet: defaultWalletId.value,
-    description: form.description,
-    amount: finalAmount,
-    date: form.date,
-    category: form.category
-  }
-
   try {
-    const url = editingId.value 
-      ? `http://localhost:8000/api/finances/expenses/${editingId.value}/`
-      : 'http://localhost:8000/api/finances/expenses/'
+    if (!editingId.value && form.isMonthly && form.monthsCount > 1) {
+      const baseDate = new Date(form.date + 'T12:00:00')
       
-    const method = editingId.value ? 'PUT' : 'POST'
+      for (let i = 0; i < form.monthsCount; i++) {
+        const currentDate = new Date(baseDate)
+        currentDate.setMonth(currentDate.getMonth() + i)
+        
+        const payload = {
+          wallet: defaultWalletId.value,
+          description: `${form.description} (${i + 1}/${form.monthsCount})`,
+          amount: Number(finalAmount.toFixed(2)),
+          date: currentDate.toISOString().split('T')[0],
+          category: form.category
+        }
 
-    const response = await fetchWithAuth(url, {
-      method: method,
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    })
-
-    if (response.ok) {
-      showToast(editingId.value ? 'Transação atualizada com sucesso!' : 'Transação registrada com sucesso!', 'success')
+        await fetchWithAuth('http://localhost:8000/api/finances/expenses/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+      }
+      showToast('Transações recorrentes registradas!', 'success')
       closeModal()
       loadData()
     } else {
-      showToast('Erro ao salvar os dados da transação.', 'error')
+      const payload = {
+        wallet: defaultWalletId.value,
+        description: form.description,
+        amount: Number(finalAmount.toFixed(2)),
+        date: form.date,
+        category: form.category
+      }
+
+      const url = editingId.value 
+        ? `http://localhost:8000/api/finances/expenses/${editingId.value}/`
+        : 'http://localhost:8000/api/finances/expenses/'
+        
+      const method = editingId.value ? 'PUT' : 'POST'
+
+      const response = await fetchWithAuth(url, {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (response.ok) {
+        showToast(editingId.value ? 'Transação atualizada com sucesso!' : 'Transação registrada com sucesso!', 'success')
+        closeModal()
+        loadData()
+      } else {
+        showToast('Erro ao salvar os dados da transação.', 'error')
+      }
     }
   } catch (error) {
     showToast('Erro de conexão com o terminal.', 'error')
@@ -400,6 +437,33 @@ const executeDelete = async () => {
     closeDeleteModal()
   }
 }
+
+const exportToCSV = () => {
+  if (filteredTransactions.value.length === 0) {
+    showToast('Nenhuma transação para exportar.', 'error')
+    return
+  }
+  
+  const headers = ['Data', 'Descricao', 'Categoria', 'Tipo', 'Valor']
+  const rows = filteredTransactions.value.map(t => [
+    t.date,
+    `"${t.description}"`,
+    `"${t.category}"`,
+    t.type === 'income' ? 'Entrada' : 'Saida',
+    t.amount.toString().replace('.', ',')
+  ])
+  
+  const csvContent = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n')
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.setAttribute('href', url)
+  link.setAttribute('download', `transacoes_${new Date().toISOString().split('T')[0]}.csv`)
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  showToast('Exportação concluída!', 'success')
+}
 </script>
 
 <template>
@@ -412,6 +476,9 @@ const executeDelete = async () => {
         <p>Acompanhe e filtre todas as suas movimentações</p>
       </div>
       <div class="header-actions">
+        <button @click="exportToCSV" class="action-btn btn-neutral">
+          <span class="btn-icon">⬇️</span> Exportar CSV
+        </button>
         <button @click="openModal('income')" class="action-btn btn-income">
           <span class="btn-icon">+</span> Nova Entrada
         </button>
@@ -445,6 +512,13 @@ const executeDelete = async () => {
           <option value="15">Últimos 15 dias</option>
           <option value="30">Últimos 30 dias</option>
           <option value="60">Últimos 2 meses</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <select v-model="filters.category">
+          <option value="all">Todas as categorias</option>
+          <option v-for="cat in uniqueCategories" :key="cat" :value="cat">{{ cat }}</option>
         </select>
       </div>
     </div>
@@ -688,12 +762,26 @@ const executeDelete = async () => {
             </div>
           </div>
 
+          <div class="form-row align-center" v-if="!editingId">
+            <div class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="form.isMonthly" />
+                Repetir mensalmente?
+              </label>
+            </div>
+            <div class="form-group" v-if="form.isMonthly">
+              <label>Qtd. Meses</label>
+              <input v-model="form.monthsCount" type="number" min="2" max="60" required />
+            </div>
+          </div>
+
           <div class="form-group">
             <label>Categoria</label>
             <select v-model="form.category" required>
               <option value="" disabled>Selecione uma categoria</option>
               <option v-for="cat in currentCategories" :key="cat" :value="cat">{{ cat }}</option>
             </select>
+            <span v-if="currentCategories.length === 0" class="error-text" style="font-size:0.8rem; color:#dc2626; margin-top:4px;">Não há categorias cadastradas. Crie em Configurações.</span>
           </div>
 
           <div class="modal-actions">
@@ -779,6 +867,18 @@ const executeDelete = async () => {
   font-size: 1.3rem;
   font-weight: 900;
   line-height: 1;
+}
+
+.btn-neutral {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-input);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-neutral:hover {
+  background-color: var(--bg-main);
+  border-color: var(--text-secondary);
 }
 
 .btn-income {
@@ -868,6 +968,203 @@ const executeDelete = async () => {
   border-color: #f7b500;
   background-color: var(--bg-card);
   box-shadow: 0 0 0 4px rgba(247, 181, 0, 0.1);
+}
+
+.dashboard-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-bottom: 35px;
+}
+
+.overview-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+.overview-card {
+  min-height: 110px;
+}
+
+.category-dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.category-card {
+  background: var(--bg-card);
+  border-radius: 20px;
+  padding: 24px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+  transition: background-color 0.3s, border-color 0.3s;
+}
+
+.full-width-card {
+  width: 100%;
+}
+
+.category-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 15px;
+  margin-bottom: 22px;
+}
+
+.category-card-header h3 {
+  margin: 0 0 6px 0;
+  color: var(--text-primary);
+  font-size: 1.15rem;
+  font-weight: 800;
+  transition: color 0.3s;
+}
+
+.category-card-header p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  transition: color 0.3s;
+}
+
+.highlight-badge {
+  white-space: nowrap;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.positive-soft {
+  background: var(--positive-bg);
+  color: #059669;
+}
+
+.negative-soft {
+  background: var(--negative-bg);
+  color: #dc2626;
+}
+
+.category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.category-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.category-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.category-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.category-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  transition: color 0.3s;
+}
+
+.category-count {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  transition: color 0.3s;
+}
+
+.category-values {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  transition: color 0.3s;
+}
+
+.progress-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--border-color);
+  overflow: hidden;
+  transition: background-color 0.3s;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.positive-fill {
+  background: linear-gradient(90deg, #34d399 0%, #10b981 100%);
+}
+
+.negative-fill {
+  background: linear-gradient(90deg, #f87171 0%, #ef4444 100%);
+}
+
+.empty-category-state {
+  color: var(--text-secondary);
+  font-weight: 500;
+  padding: 20px 0;
+  transition: color 0.3s;
+}
+
+.category-summary-table {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.summary-table-head,
+.summary-table-row {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr 1fr 0.8fr;
+  gap: 14px;
+  align-items: center;
+}
+
+.summary-table-head {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-input);
+  transition: color 0.3s, border-color 0.3s;
+}
+
+.summary-table-row {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.95rem;
+  transition: border-color 0.3s;
+}
+
+.summary-table-row:last-child {
+  border-bottom: none;
+}
+
+.summary-cat-name {
+  font-weight: 700;
+  color: var(--text-primary);
+  transition: color 0.3s;
 }
 
 .card {
@@ -1134,6 +1431,10 @@ const executeDelete = async () => {
   gap: 20px;
 }
 
+.align-center {
+  align-items: flex-end;
+}
+
 .form-group {
   display: flex;
   flex-direction: column;
@@ -1166,6 +1467,30 @@ const executeDelete = async () => {
   border-color: #f7b500;
   background-color: var(--bg-card);
   box-shadow: 0 0 0 4px rgba(247, 181, 0, 0.1);
+}
+
+.checkbox-group {
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  color: var(--text-primary) !important;
+  font-size: 1rem !important;
+}
+
+.checkbox-label input {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  margin: 0;
 }
 
 .modal-actions {
@@ -1218,6 +1543,12 @@ const executeDelete = async () => {
   box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3);
 }
 
+@media (max-width: 1024px) {
+  .category-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 768px) {
   .page-header {
     flex-direction: column;
@@ -1246,212 +1577,7 @@ const executeDelete = async () => {
     flex-direction: column;
     gap: 20px;
   }
-}
 
-.dashboard-overview {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  margin-bottom: 35px;
-}
-
-.overview-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 20px;
-}
-
-.overview-card {
-  min-height: 110px;
-}
-
-.category-dashboard-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-}
-
-.category-card {
-  background: var(--bg-card);
-  border-radius: 20px;
-  padding: 24px;
-  border: 1px solid var(--border-color);
-  box-shadow: var(--shadow-md);
-  transition: background-color 0.3s, border-color 0.3s;
-}
-
-.full-width-card {
-  width: 100%;
-}
-
-.category-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 15px;
-  margin-bottom: 22px;
-}
-
-.category-card-header h3 {
-  margin: 0 0 6px 0;
-  color: var(--text-primary);
-  font-size: 1.15rem;
-  font-weight: 800;
-  transition: color 0.3s;
-}
-
-.category-card-header p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 0.95rem;
-  transition: color 0.3s;
-}
-
-.highlight-badge {
-  white-space: nowrap;
-  padding: 8px 12px;
-  border-radius: 12px;
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-
-.positive-soft {
-  background: var(--positive-bg);
-  color: #059669;
-}
-
-.negative-soft {
-  background: var(--negative-bg);
-  color: #dc2626;
-}
-
-.category-list {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.category-row {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.category-row-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-}
-
-.category-main {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.category-name {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  transition: color 0.3s;
-}
-
-.category-count {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  transition: color 0.3s;
-}
-
-.category-values {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-  transition: color 0.3s;
-}
-
-.progress-track {
-  width: 100%;
-  height: 10px;
-  border-radius: 999px;
-  background: var(--border-color);
-  overflow: hidden;
-  transition: background-color 0.3s;
-}
-
-.progress-fill {
-  height: 100%;
-  border-radius: 999px;
-  transition: width 0.4s ease;
-}
-
-.positive-fill {
-  background: linear-gradient(90deg, #34d399 0%, #10b981 100%);
-}
-
-.negative-fill {
-  background: linear-gradient(90deg, #f87171 0%, #ef4444 100%);
-}
-
-.empty-category-state {
-  color: var(--text-secondary);
-  font-weight: 500;
-  padding: 20px 0;
-  transition: color 0.3s;
-}
-
-.category-summary-table {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.summary-table-head,
-.summary-table-row {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr 1fr 1fr 0.8fr;
-  gap: 14px;
-  align-items: center;
-}
-
-.summary-table-head {
-  color: var(--text-secondary);
-  font-size: 0.82rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 700;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border-input);
-  transition: color 0.3s, border-color 0.3s;
-}
-
-.summary-table-row {
-  padding: 14px 0;
-  border-bottom: 1px solid var(--border-color);
-  font-size: 0.95rem;
-  transition: border-color 0.3s;
-}
-
-.summary-table-row:last-child {
-  border-bottom: none;
-}
-
-.summary-cat-name {
-  font-weight: 700;
-  color: var(--text-primary);
-  transition: color 0.3s;
-}
-
-@media (max-width: 1024px) {
-  .category-dashboard-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 768px) {
   .summary-table-head,
   .summary-table-row {
     grid-template-columns: 1.3fr 1fr 1fr;

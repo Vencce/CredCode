@@ -30,17 +30,13 @@ const recentTransactionsLimited = computed(() => recentTransactions.value.slice(
 
 const defaultWalletId = ref(null)
 const cards = ref([])
+const userCategories = ref([])
 
 const showModal = ref(false)
 const modalType = ref('expense')
 
 const chartRef = ref(null)
 const chartInstance = shallowRef(null) 
-
-const predefinedCategories = {
-  income: ['Salário', 'Investimentos', 'Vendas', 'Serviços', 'Outros'],
-  expense: ['Alimentação', 'Transporte', 'Moradia', 'Contas', 'Saúde', 'Lazer', 'Outros']
-}
 
 const form = reactive({
   description: '',
@@ -50,7 +46,9 @@ const form = reactive({
   paymentMethod: 'account',
   cardId: '',
   isInstallment: false,
-  installmentsCount: 2
+  installmentsCount: 2,
+  isMonthly: false,
+  monthsCount: 12
 })
 
 const showToast = (message, type = 'error') => {
@@ -251,7 +249,6 @@ const loadData = async () => {
         const dateParts = dateVal.split('-')
         const formattedDate = dateParts.length === 3 ? `${dateParts[2].substring(0,2)}/${dateParts[1]}/${dateParts[0]}` : dateVal
 
-        // Tratamento visual para remover colchetes antigos da Home
         let desc = item.description || item.title || item.name || 'Sem descrição'
         if (desc.startsWith('[')) {
           const closingBracket = desc.indexOf(']')
@@ -277,6 +274,11 @@ const loadData = async () => {
           initChart()
         }
       })
+    }
+
+    const catRes = await fetchWithAuth('http://localhost:8000/api/finances/categories/')
+    if (catRes.ok) {
+      userCategories.value = await catRes.json()
     }
 
   } catch (error) {
@@ -310,6 +312,12 @@ onUnmounted(() => {
   }
 })
 
+const currentCategories = computed(() => {
+  return userCategories.value
+    .filter(c => c.type === modalType.value)
+    .map(c => c.name)
+})
+
 const openModal = (type) => {
   modalType.value = type
   form.description = ''
@@ -320,6 +328,8 @@ const openModal = (type) => {
   form.cardId = ''
   form.isInstallment = false
   form.installmentsCount = 2
+  form.isMonthly = false
+  form.monthsCount = 12
   showModal.value = true
 }
 
@@ -358,7 +368,7 @@ const saveTransaction = async () => {
 
     if (form.isInstallment && form.installmentsCount > 1) {
       const valPerInstallment = Number((finalAmount / form.installmentsCount).toFixed(2))
-      const baseDate = new Date(form.date)
+      const baseDate = new Date(form.date + 'T12:00:00')
       
       for (let i = 1; i <= form.installmentsCount; i++) {
         const installmentDate = new Date(baseDate)
@@ -399,28 +409,53 @@ const saveTransaction = async () => {
     finalAmount = Math.abs(finalAmount)
   }
 
-  // AGORA ENVIAMOS A CATEGORIA SEPARADAMENTE
-  const payload = {
-    wallet: defaultWalletId.value,
-    description: form.description,
-    amount: finalAmount,
-    date: form.date,
-    category: form.category
-  }
-
   try {
-    const response = await fetchWithAuth('http://localhost:8000/api/finances/expenses/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
+    if (form.isMonthly && form.monthsCount > 1) {
+      const baseDate = new Date(form.date + 'T12:00:00')
+      
+      for (let i = 0; i < form.monthsCount; i++) {
+        const currentDate = new Date(baseDate)
+        currentDate.setMonth(currentDate.getMonth() + i)
+        
+        const payload = {
+          wallet: defaultWalletId.value,
+          description: `${form.description} (${i + 1}/${form.monthsCount})`,
+          amount: Number(finalAmount.toFixed(2)),
+          date: currentDate.toISOString().split('T')[0],
+          category: form.category
+        }
 
-    if (response.ok) {
-      showToast('Transação registrada com sucesso!', 'success')
+        await fetchWithAuth('http://localhost:8000/api/finances/expenses/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+      }
+      showToast('Transações recorrentes registradas!', 'success')
       closeModal()
-      loadData() 
+      loadData()
     } else {
-      showToast('Erro ao salvar os dados da transação.', 'error')
+      const payload = {
+        wallet: defaultWalletId.value,
+        description: form.description,
+        amount: Number(finalAmount.toFixed(2)),
+        date: form.date,
+        category: form.category
+      }
+
+      const response = await fetchWithAuth('http://localhost:8000/api/finances/expenses/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      if (response.ok) {
+        showToast('Transação registrada com sucesso!', 'success')
+        closeModal()
+        loadData() 
+      } else {
+        showToast('Erro ao salvar os dados da transação.', 'error')
+      }
     }
   } catch (error) {
     showToast('Erro de conexão com o terminal.', 'error')
@@ -431,10 +466,6 @@ const formatCurrency = (value) => {
   const numValue = parseFloat(value) || 0
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValue)
 }
-
-const currentCategories = computed(() => {
-  return modalType.value === 'income' ? predefinedCategories.income : predefinedCategories.expense
-})
 </script>
 
 <template>
@@ -603,12 +634,26 @@ const currentCategories = computed(() => {
             </div>
           </div>
 
+          <div class="form-row align-center" v-if="modalType === 'income' || (modalType === 'expense' && form.paymentMethod === 'account')">
+            <div class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="form.isMonthly" />
+                Repetir mensalmente?
+              </label>
+            </div>
+            <div class="form-group" v-if="form.isMonthly">
+              <label>Qtd. Meses</label>
+              <input v-model="form.monthsCount" type="number" min="2" max="60" required />
+            </div>
+          </div>
+
           <div class="form-group full-width">
             <label>Categoria</label>
             <select v-model="form.category" required>
               <option value="" disabled>Selecione uma categoria</option>
               <option v-for="cat in currentCategories" :key="cat" :value="cat">{{ cat }}</option>
             </select>
+            <span v-if="currentCategories.length === 0" class="error-text" style="font-size:0.8rem; color:#dc2626; margin-top:4px;">Não há categorias cadastradas. Crie em Configurações.</span>
           </div>
 
           <div class="modal-actions">

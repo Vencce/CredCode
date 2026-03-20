@@ -16,6 +16,7 @@ const toast = reactive({
 
 const transactions = ref([])
 const defaultWalletId = ref(null)
+const userCategories = ref([])
 
 const showModal = ref(false)
 const modalType = ref('expense')
@@ -23,11 +24,6 @@ const editingId = ref(null)
 
 const showDeleteModal = ref(false)
 const itemToDelete = ref(null)
-
-const predefinedCategories = {
-  income: ['Salário', 'Investimentos', 'Vendas', 'Serviços', 'Outros'],
-  expense: ['Alimentação', 'Transporte', 'Moradia', 'Contas', 'Saúde', 'Lazer', 'Outros']
-}
 
 const getTomorrowDate = () => {
   const tomorrow = new Date()
@@ -39,7 +35,9 @@ const form = reactive({
   description: '',
   amount: '',
   date: getTomorrowDate(),
-  category: ''
+  category: '',
+  isMonthly: false,
+  monthsCount: 12
 })
 
 const filters = reactive({
@@ -137,7 +135,9 @@ const loadData = async () => {
         if (desc.startsWith('[')) {
           const closingBracket = desc.indexOf(']')
           if (closingBracket !== -1) {
-            cat = desc.substring(1, closingBracket)
+            if (!item.category) {
+              cat = desc.substring(1, closingBracket)
+            }
             desc = desc.substring(closingBracket + 1).trim()
           }
         }
@@ -155,6 +155,11 @@ const loadData = async () => {
       })
 
       transactions.value = parsedTransactions.filter(t => t.daysRemaining > 0).sort((a, b) => a.rawDate - b.rawDate)
+    }
+
+    const catRes = await fetchWithAuth('http://localhost:8000/api/finances/categories/')
+    if (catRes.ok) {
+      userCategories.value = await catRes.json()
     }
 
   } catch (error) {
@@ -204,7 +209,9 @@ const formatCurrency = (value) => {
 }
 
 const currentCategories = computed(() => {
-  return modalType.value === 'income' ? predefinedCategories.income : predefinedCategories.expense
+  return userCategories.value
+    .filter(c => c.type === modalType.value)
+    .map(c => c.name)
 })
 
 const openModal = (type, item = null) => {
@@ -215,6 +222,8 @@ const openModal = (type, item = null) => {
     form.description = item.description
     form.amount = Math.abs(item.amount)
     form.category = item.category
+    form.isMonthly = false
+    form.monthsCount = 12
     
     const dateParts = item.date.split('/')
     if (dateParts.length === 3) {
@@ -228,6 +237,8 @@ const openModal = (type, item = null) => {
     form.amount = ''
     form.category = ''
     form.date = getTomorrowDate()
+    form.isMonthly = false
+    form.monthsCount = 12
   }
   
   showModal.value = true
@@ -257,35 +268,59 @@ const saveTransaction = async () => {
     finalAmount = Math.abs(finalAmount)
   }
 
-  const payload = {
-    wallet: defaultWalletId.value,
-    description: `[${form.category}] ${form.description}`,
-    amount: finalAmount,
-    date: form.date
-  }
-
   try {
-    const url = editingId.value 
-      ? `http://localhost:8000/api/finances/expenses/${editingId.value}/`
-      : 'http://localhost:8000/api/finances/expenses/'
+    if (!editingId.value && form.isMonthly && form.monthsCount > 1) {
+      const baseDate = new Date(form.date + 'T12:00:00')
       
-    const method = editingId.value ? 'PUT' : 'POST'
+      for (let i = 0; i < form.monthsCount; i++) {
+        const currentDate = new Date(baseDate)
+        currentDate.setMonth(currentDate.getMonth() + i)
+        
+        const payload = {
+          wallet: defaultWalletId.value,
+          description: `${form.description} (${i + 1}/${form.monthsCount})`,
+          amount: Number(finalAmount.toFixed(2)),
+          date: currentDate.toISOString().split('T')[0],
+          category: form.category
+        }
 
-    const response = await fetchWithAuth(url, {
-      method: method,
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    })
-
-    if (response.ok) {
-      showToast(editingId.value ? 'Lançamento atualizado com sucesso!' : 'Lançamento futuro registrado!', 'success')
-      closeModal()
-      loadData()
+        await fetchWithAuth('http://localhost:8000/api/finances/expenses/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+      }
+      showToast('Lançamentos recorrentes registrados!', 'success')
     } else {
-      showToast('Erro ao salvar os dados.', 'error')
+      const payload = {
+        wallet: defaultWalletId.value,
+        description: form.description,
+        amount: Number(finalAmount.toFixed(2)),
+        date: form.date,
+        category: form.category
+      }
+
+      const url = editingId.value 
+        ? `http://localhost:8000/api/finances/expenses/${editingId.value}/`
+        : 'http://localhost:8000/api/finances/expenses/'
+        
+      const method = editingId.value ? 'PUT' : 'POST'
+
+      const response = await fetchWithAuth(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      if (response.ok) {
+        showToast(editingId.value ? 'Lançamento atualizado com sucesso!' : 'Lançamento futuro registrado!', 'success')
+      } else {
+        showToast('Erro ao salvar os dados.', 'error')
+        return
+      }
     }
+    closeModal()
+    loadData()
   } catch (error) {
     showToast('Erro de conexão com o terminal.', 'error')
   }
@@ -472,8 +507,21 @@ const executeDelete = async () => {
             </div>
 
             <div class="form-group">
-              <label>Data de Vencimento</label>
+              <label>Data de Início/Vencimento</label>
               <input v-model="form.date" type="date" required />
+            </div>
+          </div>
+
+          <div class="form-row align-center" v-if="!editingId">
+            <div class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="form.isMonthly" />
+                Repetir mensalmente?
+              </label>
+            </div>
+            <div class="form-group" v-if="form.isMonthly">
+              <label>Qtd. Meses</label>
+              <input v-model="form.monthsCount" type="number" min="2" max="60" required />
             </div>
           </div>
 
@@ -483,6 +531,7 @@ const executeDelete = async () => {
               <option value="" disabled>Selecione uma categoria</option>
               <option v-for="cat in currentCategories" :key="cat" :value="cat">{{ cat }}</option>
             </select>
+            <span v-if="currentCategories.length === 0" class="error-text" style="font-size:0.8rem; color:#dc2626; margin-top:4px;">Não há categorias cadastradas. Crie em Configurações.</span>
           </div>
 
           <div class="modal-actions">
@@ -942,6 +991,10 @@ const executeDelete = async () => {
   gap: 20px;
 }
 
+.align-center {
+  align-items: flex-end;
+}
+
 .form-group {
   display: flex;
   flex-direction: column;
@@ -976,6 +1029,30 @@ const executeDelete = async () => {
   box-shadow: 0 0 0 4px rgba(247, 181, 0, 0.1);
 }
 
+.checkbox-group {
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  color: var(--text-primary) !important;
+  font-size: 1rem !important;
+}
+
+.checkbox-label input {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  margin: 0;
+}
+
 .modal-actions {
   display: flex;
   gap: 15px;
@@ -996,7 +1073,7 @@ const executeDelete = async () => {
 }
 
 .btn-cancel:hover {
-  background-color: var(--border-color);
+  background: var(--border-color);
   color: var(--text-primary);
 }
 
@@ -1026,6 +1103,12 @@ const executeDelete = async () => {
   box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3);
 }
 
+@media (max-width: 1024px) {
+  .category-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 768px) {
   .page-header {
     flex-direction: column;
@@ -1053,6 +1136,22 @@ const executeDelete = async () => {
   .form-row {
     flex-direction: column;
     gap: 20px;
+  }
+
+  .summary-table-head,
+  .summary-table-row {
+    grid-template-columns: 1.3fr 1fr 1fr;
+  }
+
+  .summary-table-head span:nth-child(4),
+  .summary-table-head span:nth-child(5),
+  .summary-table-row span:nth-child(4),
+  .summary-table-row span:nth-child(5) {
+    display: none;
+  }
+
+  .category-card-header {
+    flex-direction: column;
   }
 }
 </style>

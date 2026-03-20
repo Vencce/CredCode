@@ -7,7 +7,7 @@ import FooterComp from '../components/FooterComp.vue'
 
 const router = useRouter()
 const isAuthorized = ref(false)
-const isSaving = ref(false)
+const activeTab = ref('profile')
 
 const toast = reactive({
   show: false,
@@ -15,10 +15,14 @@ const toast = reactive({
   type: 'error'
 })
 
-const form = reactive({
-  full_name: '',
-  monthly_income: '',
-  account_balance: ''
+const profileForm = reactive({
+  fullName: ''
+})
+
+const categories = ref([])
+const newCategoryForm = reactive({
+  name: '',
+  type: 'expense'
 })
 
 const showToast = (message, type = 'error') => {
@@ -73,68 +77,101 @@ const fetchWithAuth = async (url, options = {}) => {
   return response
 }
 
-const loadProfile = async () => {
+const loadData = async () => {
   try {
-    const response = await fetchWithAuth('http://localhost:8000/api/finances/profile/')
-    
-    if (response.ok) {
-      const data = await response.json()
-      form.full_name = data.full_name || ''
-      form.monthly_income = data.monthly_income !== undefined && data.monthly_income !== null ? data.monthly_income : ''
-      form.account_balance = data.account_balance !== undefined && data.account_balance !== null ? data.account_balance : ''
+    const profRes = await fetchWithAuth('http://localhost:8000/api/finances/profile/')
+    if (profRes.ok) {
+      const data = await profRes.json()
+      profileForm.fullName = data.full_name
     }
-  } catch (error) {
-    showToast('Erro ao carregar dados do perfil.', 'error')
+
+    const catRes = await fetchWithAuth('http://localhost:8000/api/finances/categories/')
+    if (catRes.ok) {
+      categories.value = await catRes.json()
+    }
+  } catch (e) {
+    showToast('Erro ao carregar dados.', 'error')
   }
 }
 
 onMounted(() => {
   const token = localStorage.getItem('access_token')
-  
   if (!token) {
-    showToast('Acesso negado. Por favor, faça login no terminal.', 'error')
-    setTimeout(() => {
-      router.push('/')
-    }, 1500)
+    router.push('/')
   } else {
     isAuthorized.value = true
-    loadProfile()
+    loadData()
   }
 })
 
 const saveProfile = async () => {
-  if (!form.full_name) {
-    showToast('O nome completo é obrigatório.', 'error')
+  if (!profileForm.fullName) {
+    showToast('O nome não pode estar vazio.', 'error')
+    return
+  }
+  
+  try {
+    const res = await fetchWithAuth('http://localhost:8000/api/finances/profile/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ full_name: profileForm.fullName })
+    })
+    
+    if (res.ok) {
+      showToast('Perfil atualizado com sucesso!', 'success')
+      setTimeout(() => {
+        window.location.reload()
+      }, 1000)
+    } else {
+      showToast('Erro ao atualizar perfil.', 'error')
+    }
+  } catch (e) {
+    showToast('Erro de conexão.', 'error')
+  }
+}
+
+const addCategory = async () => {
+  if (!newCategoryForm.name || !newCategoryForm.type) {
+    showToast('Preencha os campos da categoria.', 'error')
     return
   }
 
-  isSaving.value = true
-
-  const payload = {
-    full_name: form.full_name,
-    monthly_income: form.monthly_income ? parseFloat(form.monthly_income) : 0,
-    account_balance: form.account_balance ? parseFloat(form.account_balance) : 0
-  }
-
   try {
-    const response = await fetchWithAuth('http://localhost:8000/api/finances/profile/', {
+    const res = await fetchWithAuth('http://localhost:8000/api/finances/categories/', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: newCategoryForm.name,
+        type: newCategoryForm.type
+      })
     })
 
-    if (response.ok) {
-      showToast('Perfil atualizado com sucesso!', 'success')
-      loadProfile()
+    if (res.ok) {
+      showToast('Categoria adicionada!', 'success')
+      newCategoryForm.name = ''
+      loadData()
     } else {
-      showToast('Erro ao salvar os dados do perfil.', 'error')
+      showToast('Erro ao adicionar categoria ou categoria já existe.', 'error')
     }
-  } catch (error) {
-    showToast('Erro de conexão com o terminal.', 'error')
-  } finally {
-    isSaving.value = false
+  } catch (e) {
+    showToast('Erro de conexão.', 'error')
+  }
+}
+
+const deleteCategory = async (id) => {
+  try {
+    const res = await fetchWithAuth(`http://localhost:8000/api/finances/categories/${id}/`, {
+      method: 'DELETE'
+    })
+
+    if (res.ok) {
+      showToast('Categoria removida!', 'success')
+      loadData()
+    } else {
+      showToast('Erro ao remover categoria.', 'error')
+    }
+  } catch (e) {
+    showToast('Erro de conexão.', 'error')
   }
 }
 </script>
@@ -146,49 +183,61 @@ const saveProfile = async () => {
     <div class="page-header">
       <div class="header-titles">
         <h1>Configurações</h1>
-        <p>Gerencie seus dados pessoais e preferências do terminal</p>
+        <p>Gerencie o seu perfil e as suas preferências de sistema</p>
       </div>
     </div>
 
-    <div class="settings-container">
-      <div class="settings-card">
-        <div class="card-header">
-          <div class="header-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-              <circle cx="12" cy="7" r="4"></circle>
-            </svg>
-          </div>
-          <div class="header-text">
-            <h2>Perfil do Usuário</h2>
-            <p>Atualize suas informações básicas e saldos iniciais.</p>
-          </div>
+    <div class="tabs-container">
+      <button :class="['tab-btn', { active: activeTab === 'profile' }]" @click="activeTab = 'profile'">
+        Perfil do Utilizador
+      </button>
+      <button :class="['tab-btn', { active: activeTab === 'categories' }]" @click="activeTab = 'categories'">
+        Categorias Personalizadas
+      </button>
+    </div>
+
+    <div v-if="activeTab === 'profile'" class="settings-card">
+      <form @submit.prevent="saveProfile" class="settings-form">
+        <div class="form-group">
+          <label>Nome Completo</label>
+          <input v-model="profileForm.fullName" type="text" placeholder="Como queres ser chamado?" required />
         </div>
+        <button type="submit" class="btn-save">Salvar Alterações</button>
+      </form>
+    </div>
 
-        <form @submit.prevent="saveProfile" class="settings-form">
-          <div class="form-group full-width">
-            <label>Nome Completo</label>
-            <input v-model="form.full_name" type="text" placeholder="Seu nome completo" required />
+    <div v-if="activeTab === 'categories'" class="settings-card">
+      <form @submit.prevent="addCategory" class="add-category-row">
+        <div class="form-group" style="flex: 2; margin: 0;">
+          <label>Nome da Categoria</label>
+          <input v-model="newCategoryForm.name" type="text" placeholder="Ex: Viagens, Pets, Educação..." required />
+        </div>
+        <div class="form-group" style="flex: 1; margin: 0;">
+          <label>Tipo</label>
+          <select v-model="newCategoryForm.type" required>
+            <option value="expense">Saída</option>
+            <option value="income">Entrada</option>
+          </select>
+        </div>
+        <button type="submit" class="btn-save">Adicionar</button>
+      </form>
+
+      <div v-if="categories.length === 0" class="empty-state">
+        Nenhuma categoria personalizada criada ainda.
+      </div>
+
+      <div class="categories-grid" v-else>
+        <div v-for="cat in categories" :key="cat.id" class="category-item">
+          <div class="cat-info">
+            <span class="cat-name">{{ cat.name }}</span>
+            <span :class="['cat-type', cat.type === 'income' ? 'type-income' : 'type-expense']">
+              {{ cat.type === 'income' ? 'Entrada' : 'Saída' }}
+            </span>
           </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>Renda Mensal (R$)</label>
-              <input v-model="form.monthly_income" type="number" step="0.01" min="0" placeholder="0.00" />
-            </div>
-
-            <div class="form-group">
-              <label>Saldo Inicial da Conta (R$)</label>
-              <input v-model="form.account_balance" type="number" step="0.01" placeholder="0.00" />
-            </div>
-          </div>
-
-          <div class="form-actions">
-            <button type="submit" class="btn-save" :disabled="isSaving">
-              {{ isSaving ? 'Salvando...' : 'Salvar Alterações' }}
-            </button>
-          </div>
-        </form>
+          <button type="button" class="btn-delete" @click="deleteCategory(cat.id)" title="Excluir Categoria">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -197,179 +246,47 @@ const saveProfile = async () => {
 </template>
 
 <style scoped>
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 35px;
-}
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+.header-titles h1 { color: var(--text-primary); font-size: 2rem; font-weight: 800; margin: 0 0 4px 0; letter-spacing: -0.5px; transition: color 0.3s; }
+.header-titles p { color: var(--text-secondary); margin: 0; font-size: 1.05rem; transition: color 0.3s; }
 
-.header-titles h1 {
-  color: var(--text-primary);
-  font-size: 2rem;
-  font-weight: 800;
-  margin: 0 0 4px 0;
-  letter-spacing: -0.5px;
-  transition: color 0.3s;
-}
+.tabs-container { display: flex; gap: 15px; margin-bottom: 25px; border-bottom: 2px solid var(--border-color); padding-bottom: 15px; transition: border-color 0.3s; }
+.tab-btn { background: transparent; border: none; color: var(--text-secondary); font-size: 1.05rem; font-weight: 700; padding: 12px 24px; cursor: pointer; transition: all 0.3s; border-radius: 12px; }
+.tab-btn.active { background: var(--bg-card); color: var(--text-primary); box-shadow: var(--shadow-sm); border: 1px solid var(--border-color); }
+.tab-btn:hover:not(.active) { color: var(--text-primary); background: var(--input-bg); }
 
-.header-titles p {
-  color: var(--text-secondary);
-  margin: 0;
-  font-size: 1.05rem;
-  transition: color 0.3s;
-}
+.settings-card { background: var(--bg-card); border-radius: 20px; padding: 35px; box-shadow: var(--shadow-md); border: 1px solid var(--border-color); transition: background-color 0.3s, border-color 0.3s; }
+.settings-form { max-width: 500px; display: flex; flex-direction: column; gap: 25px; }
 
-.settings-container {
-  max-width: 850px;
-  margin-bottom: 40px;
-}
+.form-group { display: flex; flex-direction: column; gap: 10px; }
+.form-group label { font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); transition: color 0.3s; }
+.form-group input, .form-group select { width: 100%; box-sizing: border-box; padding: 16px; border: 1px solid var(--border-input); border-radius: 12px; font-size: 1rem; background-color: var(--input-bg); color: var(--text-primary); outline: none; transition: all 0.3s; font-family: 'Inter', sans-serif; }
+.form-group input:focus, .form-group select:focus { border-color: #f7b500; box-shadow: 0 0 0 4px rgba(247, 181, 0, 0.1); background-color: var(--bg-card); }
 
-.settings-card {
-  background: var(--bg-card);
-  border-radius: 24px;
-  padding: 45px 40px;
-  box-shadow: var(--shadow-lg);
-  border: 1px solid var(--border-color);
-  transition: background-color 0.3s, border-color 0.3s;
-}
+.btn-save { padding: 16px 24px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3); height: 53px; }
+.btn-save:hover { transform: translateY(-2px); box-shadow: 0 15px 25px -5px rgba(16, 185, 129, 0.4); }
 
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  margin-bottom: 35px;
-  padding-bottom: 25px;
-  border-bottom: 2px solid var(--border-color);
-  transition: border-color 0.3s;
-}
+.add-category-row { display: flex; gap: 15px; align-items: flex-end; margin-bottom: 35px; padding-bottom: 35px; border-bottom: 1px solid var(--border-color); }
 
-.header-icon {
-  width: 60px;
-  height: 60px;
-  background-color: var(--bg-main);
-  color: #f7b500;
-  border-radius: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.3s;
-}
+.empty-state { text-align: center; padding: 40px; color: var(--text-secondary); font-weight: 500; background: var(--input-bg); border-radius: 12px; border: 1px dashed var(--border-input); transition: all 0.3s; }
 
-.header-text h2 {
-  color: var(--text-primary);
-  font-size: 1.4rem;
-  font-weight: 800;
-  margin: 0 0 6px 0;
-  letter-spacing: -0.5px;
-  transition: color 0.3s;
-}
+.categories-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; }
+.category-item { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: var(--input-bg); border-radius: 12px; border: 1px solid var(--border-input); transition: all 0.3s; }
+.category-item:hover { background: var(--bg-card); border-color: var(--border-color); box-shadow: var(--shadow-sm); transform: translateY(-2px); }
 
-.header-text p {
-  color: var(--text-secondary);
-  margin: 0;
-  font-size: 1rem;
-  transition: color 0.3s;
-}
+.cat-info { display: flex; flex-direction: column; gap: 6px; }
+.cat-name { font-weight: 700; color: var(--text-primary); font-size: 1.05rem; transition: color 0.3s; }
+.cat-type { font-size: 0.75rem; font-weight: 700; padding: 4px 10px; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+.type-income { background: var(--positive-bg); color: #059669; }
+.type-expense { background: var(--negative-bg); color: #dc2626; }
 
-.settings-form {
-  display: flex;
-  flex-direction: column;
-  gap: 25px;
-}
-
-.form-row {
-  display: flex;
-  gap: 25px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  flex: 1;
-}
-
-.full-width {
-  width: 100%;
-}
-
-.form-group label {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  transition: color 0.3s;
-}
-
-.form-group input {
-  padding: 16px;
-  border: 1px solid var(--border-input);
-  background-color: var(--input-bg);
-  border-radius: 12px;
-  font-size: 1rem;
-  font-family: 'Inter', sans-serif;
-  outline: none;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  color: var(--text-primary);
-}
-
-.form-group input::placeholder {
-  color: #94a3b8;
-  font-weight: 500;
-}
-
-.form-group input:focus {
-  border-color: #f7b500;
-  background-color: var(--bg-card);
-  box-shadow: 0 0 0 4px rgba(247, 181, 0, 0.1);
-}
-
-.form-actions {
-  margin-top: 15px;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.btn-save {
-  padding: 16px 35px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  font-weight: 800;
-  font-size: 1.05rem;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3);
-}
-
-.btn-save:hover:not(:disabled) {
-  transform: translateY(-3px);
-  box-shadow: 0 15px 25px -5px rgba(16, 185, 129, 0.4);
-}
-
-.btn-save:disabled {
-  background: var(--border-color);
-  color: var(--text-secondary);
-  box-shadow: none;
-  cursor: not-allowed;
-  transform: none;
-}
+.btn-delete { background: var(--negative-bg); color: #dc2626; border: 1px solid transparent; width: 40px; height: 40px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+.btn-delete:hover { background: #dc2626; color: white; transform: scale(1.05); }
 
 @media (max-width: 768px) {
-  .settings-card {
-    padding: 30px 25px;
-  }
-
-  .form-row {
-    flex-direction: column;
-    gap: 25px;
-  }
-  
-  .btn-save {
-    width: 100%;
-  }
+  .add-category-row { flex-direction: column; align-items: stretch; gap: 20px; }
+  .btn-save { width: 100%; }
+  .tabs-container { flex-direction: column; gap: 10px; border-bottom: none; }
+  .tab-btn { width: 100%; text-align: center; }
 }
 </style>

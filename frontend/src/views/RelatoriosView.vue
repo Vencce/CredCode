@@ -1,6 +1,7 @@
 <script setup>
-import { ref, onMounted, reactive, computed } from 'vue'
+import { ref, onMounted, onUnmounted, reactive, nextTick, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
+import * as echarts from 'echarts'
 import ToastMessage from '../components/ToastMessage.vue'
 import SideLayout from '../components/SideLayout.vue'
 import FooterComp from '../components/FooterComp.vue'
@@ -14,7 +15,16 @@ const toast = reactive({
   type: 'error'
 })
 
-const transactions = ref([])
+const barChartRef = ref(null)
+const lineChartRef = ref(null)
+const barChartInstance = shallowRef(null)
+const lineChartInstance = shallowRef(null)
+
+const summaryData = reactive({
+  totalIncome: 0,
+  totalExpense: 0,
+  balanceEvolution: 0
+})
 
 const showToast = (message, type = 'error') => {
   toast.message = message
@@ -68,118 +78,189 @@ const fetchWithAuth = async (url, options = {}) => {
   return response
 }
 
+const formatCurrency = (value) => {
+  const numValue = parseFloat(value) || 0
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValue)
+}
+
+const initCharts = (months, incomes, expenses, balances) => {
+  if (!barChartRef.value || !lineChartRef.value) return
+  
+  if (!barChartInstance.value) barChartInstance.value = echarts.init(barChartRef.value)
+  if (!lineChartInstance.value) lineChartInstance.value = echarts.init(lineChartRef.value)
+
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+  const textColor = isDark ? '#94a3b8' : '#64748b'
+  const gridColor = isDark ? '#1e293b' : '#f1f5f9'
+
+  const barOption = {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' }
+    },
+    legend: {
+      data: ['Receitas', 'Despesas'],
+      textStyle: { color: textColor },
+      bottom: 0
+    },
+    grid: { left: '3%', right: '4%', bottom: '15%', top: '5%', containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: months,
+      axisLabel: { color: textColor },
+      axisLine: { lineStyle: { color: gridColor } }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { color: textColor },
+      splitLine: { lineStyle: { color: gridColor, type: 'dashed' } }
+    },
+    series: [
+      {
+        name: 'Receitas',
+        type: 'bar',
+        data: incomes,
+        itemStyle: { color: '#10b981', borderRadius: [4, 4, 0, 0] }
+      },
+      {
+        name: 'Despesas',
+        type: 'bar',
+        data: expenses,
+        itemStyle: { color: '#ef4444', borderRadius: [4, 4, 0, 0] }
+      }
+    ]
+  }
+
+  const lineOption = {
+    tooltip: {
+      trigger: 'axis',
+      formatter: '{b}<br/>Saldo: R$ {c}'
+    },
+    grid: { left: '3%', right: '4%', bottom: '10%', top: '5%', containLabel: true },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: months,
+      axisLabel: { color: textColor },
+      axisLine: { lineStyle: { color: gridColor } }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { color: textColor },
+      splitLine: { lineStyle: { color: gridColor, type: 'dashed' } }
+    },
+    series: [
+      {
+        data: balances,
+        type: 'line',
+        smooth: true,
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(247, 181, 0, 0.4)' },
+            { offset: 1, color: 'rgba(247, 181, 0, 0.05)' }
+          ])
+        },
+        itemStyle: { color: '#f7b500' },
+        lineStyle: { width: 3 }
+      }
+    ]
+  }
+
+  barChartInstance.value.setOption(barOption)
+  lineChartInstance.value.setOption(lineOption)
+}
+
+const handleResize = () => {
+  if (barChartInstance.value) barChartInstance.value.resize()
+  if (lineChartInstance.value) lineChartInstance.value.resize()
+}
+
+const handleThemeChange = () => {
+  loadData()
+}
+
 const loadData = async () => {
   try {
     const expensesRes = await fetchWithAuth('http://localhost:8000/api/finances/expenses/')
-
+    
     if (expensesRes.ok) {
-      const expenses = await expensesRes.json()
+      const data = await expensesRes.json()
+      
+      const monthMap = {}
+      const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+      
+      const today = new Date()
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+        const label = `${monthNames[d.getMonth()]} ${d.getFullYear()}`
+        monthMap[key] = { label, income: 0, expense: 0, balance: 0 }
+      }
 
-      transactions.value = expenses.map(item => {
-        const val = parseFloat(item.amount || item.value || 0)
-        let cat = item.category || 'Geral'
-        let desc = item.description || 'Sem descrição'
+      let globalIncome = 0
+      let globalExpense = 0
 
-        if (desc.startsWith('[')) {
-          const closingBracket = desc.indexOf(']')
-          if (closingBracket !== -1) {
-            cat = desc.substring(1, closingBracket)
-            desc = desc.substring(closingBracket + 1).trim()
-          }
+      data.forEach(item => {
+        const val = parseFloat(item.amount)
+        const parts = item.date.split('-')
+        const key = `${parts[0]}-${parts[1]}`
+        
+        if (val >= 0) globalIncome += val
+        else globalExpense += Math.abs(val)
+
+        if (monthMap[key]) {
+          if (val >= 0) monthMap[key].income += val
+          else monthMap[key].expense += Math.abs(val)
         }
+      })
 
-        return {
-          id: item.id,
-          description: desc,
-          category: cat,
-          amount: val,
-          type: val >= 0 ? 'income' : 'expense'
-        }
+      summaryData.totalIncome = globalIncome
+      summaryData.totalExpense = globalExpense
+      summaryData.balanceEvolution = globalIncome - globalExpense
+
+      const sortedKeys = Object.keys(monthMap).sort()
+      const labels = []
+      const incomes = []
+      const expenses = []
+      const balances = []
+      
+      let runningBalance = 0
+
+      sortedKeys.forEach(key => {
+        labels.push(monthMap[key].label)
+        incomes.push(monthMap[key].income.toFixed(2))
+        expenses.push(monthMap[key].expense.toFixed(2))
+        runningBalance += (monthMap[key].income - monthMap[key].expense)
+        balances.push(runningBalance.toFixed(2))
+      })
+
+      nextTick(() => {
+        initCharts(labels, incomes, expenses, balances)
       })
     }
   } catch (error) {
-    showToast('Erro ao sincronizar dados com o terminal.', 'error')
+    showToast('Erro ao carregar os dados dos relatórios.', 'error')
   }
 }
 
 onMounted(() => {
   const token = localStorage.getItem('access_token')
-
   if (!token) {
-    showToast('Acesso negado. Por favor, faça login no terminal.', 'error')
-    setTimeout(() => {
-      router.push('/')
-    }, 1500)
+    router.push('/')
   } else {
     isAuthorized.value = true
     loadData()
+    window.addEventListener('resize', handleResize)
+    window.addEventListener('theme-changed', handleThemeChange)
   }
 })
 
-const totalIncome = computed(() => {
-  return transactions.value
-    .filter(t => t.type === 'income')
-    .reduce((acc, curr) => acc + curr.amount, 0)
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  window.removeEventListener('theme-changed', handleThemeChange)
+  if (barChartInstance.value) barChartInstance.value.dispose()
+  if (lineChartInstance.value) lineChartInstance.value.dispose()
 })
-
-const totalExpense = computed(() => {
-  return transactions.value
-    .filter(t => t.type === 'expense')
-    .reduce((acc, curr) => acc + Math.abs(curr.amount), 0)
-})
-
-const savingsRate = computed(() => {
-  if (totalIncome.value === 0) return 0
-  const rate = ((totalIncome.value - totalExpense.value) / totalIncome.value) * 100
-  return rate > 0 ? rate : 0
-})
-
-const expensesByCategory = computed(() => {
-  const expenses = transactions.value.filter(t => t.type === 'expense')
-  const total = totalExpense.value
-  
-  if (total === 0) return []
-
-  const groups = expenses.reduce((acc, curr) => {
-    if (!acc[curr.category]) acc[curr.category] = 0
-    acc[curr.category] += Math.abs(curr.amount)
-    return acc
-  }, {})
-
-  return Object.keys(groups).map(key => {
-    return {
-      name: key,
-      amount: groups[key],
-      percentage: Math.round((groups[key] / total) * 100)
-    }
-  }).sort((a, b) => b.amount - a.amount)
-})
-
-const incomeByCategory = computed(() => {
-  const incomes = transactions.value.filter(t => t.type === 'income')
-  const total = totalIncome.value
-  
-  if (total === 0) return []
-
-  const groups = incomes.reduce((acc, curr) => {
-    if (!acc[curr.category]) acc[curr.category] = 0
-    acc[curr.category] += curr.amount
-    return acc
-  }, {})
-
-  return Object.keys(groups).map(key => {
-    return {
-      name: key,
-      amount: groups[key],
-      percentage: Math.round((groups[key] / total) * 100)
-    }
-  }).sort((a, b) => b.amount - a.amount)
-})
-
-const formatCurrency = (value) => {
-  const numValue = parseFloat(value) || 0
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValue)
-}
 </script>
 
 <template>
@@ -189,93 +270,59 @@ const formatCurrency = (value) => {
     <div class="page-header">
       <div class="header-titles">
         <h1>Relatórios e Análises</h1>
-        <p>Visão detalhada de como seu dinheiro está sendo distribuído</p>
+        <p>Acompanhe a evolução gráfica do seu património</p>
       </div>
     </div>
 
     <div class="summary-cards">
       <div class="card summary-item highlight-card">
         <div class="card-data">
-          <h3>Taxa de Economia</h3>
-          <span class="summary-value text-white">{{ savingsRate.toFixed(1) }}%</span>
-          <p class="summary-subtitle text-white-muted">da renda foi poupada</p>
+          <h3>Crescimento Patrimonial</h3>
+          <span :class="['summary-value', summaryData.balanceEvolution >= 0 ? 'text-positive' : 'text-negative']">
+            {{ formatCurrency(summaryData.balanceEvolution) }}
+          </span>
         </div>
         <div class="card-icon-wrapper highlight-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2v20"></path>
-            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-          </svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M18 9l-5 5-3-3-5 5"></path></svg>
         </div>
       </div>
       
       <div class="card summary-item">
         <div class="card-data">
-          <h3>Total de Entradas</h3>
-          <span class="summary-value positive">{{ formatCurrency(totalIncome) }}</span>
+          <h3>Total Histórico (Receitas)</h3>
+          <span class="summary-value positive">{{ formatCurrency(summaryData.totalIncome) }}</span>
         </div>
         <div class="card-icon-wrapper positive-bg">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
-            <polyline points="17 6 23 6 23 12"></polyline>
-          </svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
         </div>
       </div>
 
       <div class="card summary-item">
         <div class="card-data">
-          <h3>Total de Saídas</h3>
-          <span class="summary-value negative">{{ formatCurrency(totalExpense) }}</span>
+          <h3>Total Histórico (Despesas)</h3>
+          <span class="summary-value negative">{{ formatCurrency(summaryData.totalExpense) }}</span>
         </div>
         <div class="card-icon-wrapper negative-bg">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline>
-            <polyline points="17 18 23 18 23 12"></polyline>
-          </svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline></svg>
         </div>
       </div>
     </div>
 
-    <div class="reports-grid">
-      <div class="report-section">
-        <div class="section-header">
-          <h2>Despesas por Categoria</h2>
+    <div class="charts-grid">
+      <div class="chart-wrapper">
+        <div class="chart-header">
+          <h2>Comparativo Mensal</h2>
+          <p>Receitas versus Despesas nos últimos 6 meses</p>
         </div>
-        <div class="categories-list">
-          <div v-if="expensesByCategory.length === 0" class="empty-state">
-            Nenhuma despesa registrada.
-          </div>
-          <div v-for="cat in expensesByCategory" :key="cat.name" class="category-item">
-            <div class="cat-info">
-              <span class="cat-name">{{ cat.name }}</span>
-              <span class="cat-amount fw-700">{{ formatCurrency(cat.amount) }}</span>
-            </div>
-            <div class="cat-bar-bg">
-              <div class="cat-bar-fill bar-negative" :style="{ width: cat.percentage + '%' }"></div>
-            </div>
-            <span class="cat-percentage">{{ cat.percentage }}%</span>
-          </div>
-        </div>
+        <div ref="barChartRef" class="chart-canvas"></div>
       </div>
 
-      <div class="report-section">
-        <div class="section-header">
-          <h2>Entradas por Categoria</h2>
+      <div class="chart-wrapper">
+        <div class="chart-header">
+          <h2>Evolução do Saldo</h2>
+          <p>Acumulação do seu saldo ao longo do semestre</p>
         </div>
-        <div class="categories-list">
-          <div v-if="incomeByCategory.length === 0" class="empty-state">
-            Nenhuma entrada registrada.
-          </div>
-          <div v-for="cat in incomeByCategory" :key="cat.name" class="category-item">
-            <div class="cat-info">
-              <span class="cat-name">{{ cat.name }}</span>
-              <span class="cat-amount fw-700">{{ formatCurrency(cat.amount) }}</span>
-            </div>
-            <div class="cat-bar-bg">
-              <div class="cat-bar-fill bar-positive" :style="{ width: cat.percentage + '%' }"></div>
-            </div>
-            <span class="cat-percentage">{{ cat.percentage }}%</span>
-          </div>
-        </div>
+        <div ref="lineChartRef" class="chart-canvas"></div>
       </div>
     </div>
 
@@ -284,206 +331,42 @@ const formatCurrency = (value) => {
 </template>
 
 <style scoped>
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 30px;
-}
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+.header-titles h1 { color: var(--text-primary); font-size: 2rem; font-weight: 800; margin: 0 0 4px 0; letter-spacing: -0.5px; transition: color 0.3s; }
+.header-titles p { color: var(--text-secondary); margin: 0; font-size: 1.05rem; transition: color 0.3s; }
 
-.header-titles h1 {
-  color: var(--text-primary);
-  font-size: 2rem;
-  font-weight: 800;
-  margin: 0 0 4px 0;
-  letter-spacing: -0.5px;
-  transition: color 0.3s;
-}
+.summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 35px; }
 
-.header-titles p {
-  color: var(--text-secondary);
-  margin: 0;
-  font-size: 1.05rem;
-  transition: color 0.3s;
-}
+.card { background: var(--bg-card); padding: 25px 30px; border-radius: 20px; box-shadow: var(--shadow-md); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.3s, border-color 0.3s; }
+.card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
 
-.summary-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
-  margin-bottom: 35px;
-}
+.highlight-card { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: none; }
+.highlight-card .card-data h3 { color: #94a3b8; }
 
-.card {
-  background: var(--bg-card);
-  padding: 25px 30px;
-  border-radius: 20px;
-  box-shadow: var(--shadow-md);
-  border: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.3s, border-color 0.3s;
-}
+.card-data h3 { color: var(--text-secondary); font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 8px 0; transition: color 0.3s; }
+.summary-value { font-size: 1.8rem; font-weight: 800; margin: 0; letter-spacing: -0.5px; color: var(--text-primary); display: block; transition: color 0.3s; }
 
-.card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
-}
-
-.highlight-card {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-  border: none;
-}
-
-.card-data h3 {
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin: 0 0 8px 0;
-  transition: color 0.3s;
-}
-
-.highlight-card .card-data h3 {
-  color: #94a3b8;
-}
-
-.summary-value {
-  font-size: 1.8rem;
-  font-weight: 800;
-  margin: 0;
-  letter-spacing: -0.5px;
-  color: var(--text-primary);
-  display: block;
-  transition: color 0.3s;
-}
-
-.summary-subtitle {
-  margin: 5px 0 0 0;
-  font-size: 0.85rem;
-}
-
-.text-white { color: #f8fafc; }
-.text-white-muted { color: #94a3b8; }
+.text-positive { color: #34d399; }
+.text-negative { color: #f87171; }
 .positive { color: #059669; }
 .negative { color: #dc2626; }
 
-.card-icon-wrapper {
-  width: 60px;
-  height: 60px;
-  border-radius: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
+.card-icon-wrapper { width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; }
 .positive-bg { background-color: var(--positive-bg); color: #10b981; }
 .negative-bg { background-color: var(--negative-bg); color: #ef4444; }
 .highlight-icon { background-color: rgba(255, 255, 255, 0.1); color: #f7b500; }
 
-.reports-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 30px;
-  margin-bottom: 40px;
-}
+.charts-grid { display: flex; flex-direction: column; gap: 30px; margin-bottom: 40px; }
 
-.report-section {
-  background: var(--bg-card);
-  border-radius: 20px;
-  padding: 30px;
-  box-shadow: var(--shadow-md);
-  border: 1px solid var(--border-color);
-  transition: background-color 0.3s, border-color 0.3s;
-}
-
-.section-header {
-  margin-bottom: 25px;
-  padding-bottom: 15px;
-  border-bottom: 2px solid var(--border-input);
-  transition: border-color 0.3s;
-}
-
-.section-header h2 {
-  color: var(--text-primary);
-  font-size: 1.3rem;
-  font-weight: 800;
-  margin: 0;
-  transition: color 0.3s;
-}
-
-.categories-list {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.category-item {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.cat-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.cat-name {
-  color: var(--text-primary);
-  font-weight: 600;
-  font-size: 0.95rem;
-  transition: color 0.3s;
-}
-
-.cat-amount {
-  color: var(--text-primary);
-  font-size: 0.95rem;
-  transition: color 0.3s;
-}
-
-.cat-bar-bg {
-  width: 100%;
-  height: 8px;
-  background-color: var(--border-color);
-  border-radius: 4px;
-  overflow: hidden;
-  transition: background-color 0.3s;
-}
-
-.cat-bar-fill {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.bar-negative { background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%); }
-.bar-positive { background: linear-gradient(90deg, #10b981 0%, #059669 100%); }
-
-.cat-percentage {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  font-weight: 700;
-  text-align: right;
-  transition: color 0.3s;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 40px 0;
-  color: var(--text-secondary);
-  font-weight: 500;
-  transition: color 0.3s;
-}
-
-.fw-700 { font-weight: 700; }
+.chart-wrapper { background: var(--bg-card); border-radius: 20px; padding: 30px; box-shadow: var(--shadow-md); border: 1px solid var(--border-color); transition: background-color 0.3s, border-color 0.3s; }
+.chart-header { margin-bottom: 20px; }
+.chart-header h2 { color: var(--text-primary); font-size: 1.3rem; font-weight: 800; margin: 0 0 5px 0; transition: color 0.3s; }
+.chart-header p { color: var(--text-secondary); font-size: 0.95rem; margin: 0; transition: color 0.3s; }
+.chart-canvas { width: 100%; height: 350px; }
 
 @media (max-width: 768px) {
-  .reports-grid {
-    grid-template-columns: 1fr;
-  }
+  .page-header { flex-direction: column; align-items: flex-start; gap: 15px; }
+  .chart-canvas { height: 250px; }
+  .chart-wrapper { padding: 20px; }
 }
 </style>

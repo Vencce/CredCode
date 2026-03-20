@@ -67,6 +67,12 @@ const router = createRouter({
       component: () => import('../views/CartoesView.vue'),
       meta: { requiresAuth: true }
     },
+    {
+      path: '/orcamentos',
+      name: 'orcamentos',
+      component: () => import('../views/OrcamentosView.vue'),
+      meta: { requiresAuth: true }
+    },
   ],
 })
 

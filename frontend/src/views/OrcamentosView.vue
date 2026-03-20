@@ -14,22 +14,19 @@ const toast = reactive({
   type: 'error'
 })
 
-const goals = ref([])
+const defaultWalletId = ref(null)
+const budgets = ref([])
+const expenses = ref([])
 
 const showModal = ref(false)
-const showAddFundsModal = ref(false)
 const showDeleteModal = ref(false)
 const editingId = ref(null)
 const itemToDelete = ref(null)
-const selectedGoal = ref(null)
+
+const expenseCategories = ['Alimentação', 'Transporte', 'Moradia', 'Contas', 'Saúde', 'Lazer', 'Outros']
 
 const form = reactive({
-  title: '',
-  targetAmount: '',
-  deadline: ''
-})
-
-const fundsForm = reactive({
+  category: '',
   amount: ''
 })
 
@@ -87,22 +84,20 @@ const fetchWithAuth = async (url, options = {}) => {
 
 const loadData = async () => {
   try {
-    const goalsRes = await fetchWithAuth('http://localhost:8000/api/finances/goals/')
-    if (goalsRes.ok) {
-      const data = await goalsRes.json()
-      goals.value = data.map(g => {
-        const saved = parseFloat(g.saved_amount)
-        const target = parseFloat(g.target_amount)
-        let percentage = (saved / target) * 100
-        if (percentage > 100) percentage = 100
-        
-        return {
-          ...g,
-          saved_amount: saved,
-          target_amount: target,
-          percentage: percentage
-        }
-      })
+    const walletRes = await fetchWithAuth('http://localhost:8000/api/finances/wallets/')
+    if (walletRes.ok) {
+      const wallets = await walletRes.json()
+      if (wallets.length > 0) defaultWalletId.value = wallets[0].id
+    }
+
+    const expensesRes = await fetchWithAuth('http://localhost:8000/api/finances/expenses/')
+    if (expensesRes.ok) {
+      expenses.value = await expensesRes.json()
+    }
+
+    const budgetsRes = await fetchWithAuth('http://localhost:8000/api/finances/budgets/')
+    if (budgetsRes.ok) {
+      budgets.value = await budgetsRes.json()
     }
   } catch (error) {
     showToast('Erro ao sincronizar dados com o terminal.', 'error')
@@ -122,6 +117,43 @@ onMounted(() => {
   }
 })
 
+const budgetsWithProgress = computed(() => {
+  const now = new Date()
+  const currentMonth = now.getMonth()
+  const currentYear = now.getFullYear()
+
+  const spentByCategory = {}
+  
+  expenses.value.forEach(e => {
+    const parts = e.date.split('-')
+    const expDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2].substring(0, 2)))
+    
+    if (e.amount < 0 && expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear) {
+      const cat = e.category || 'Outros'
+      spentByCategory[cat] = (spentByCategory[cat] || 0) + Math.abs(e.amount)
+    }
+  })
+
+  return budgets.value.map(b => {
+    const spent = spentByCategory[b.category] || 0
+    const limit = parseFloat(b.amount)
+    let percentage = (spent / limit) * 100
+    if (percentage > 100) percentage = 100
+    
+    let status = 'success'
+    if (percentage >= 80 && percentage < 100) status = 'warning'
+    if (percentage >= 100) status = 'danger'
+
+    return {
+      ...b,
+      spent,
+      limit,
+      percentage,
+      status
+    }
+  }).sort((a, b) => b.percentage - a.percentage)
+})
+
 const formatCurrency = (value) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 }
@@ -129,14 +161,12 @@ const formatCurrency = (value) => {
 const openModal = (item = null) => {
   if (item) {
     editingId.value = item.id
-    form.title = item.title
-    form.targetAmount = item.target_amount
-    form.deadline = item.deadline ? item.deadline : ''
+    form.category = item.category
+    form.amount = item.amount
   } else {
     editingId.value = null
-    form.title = ''
-    form.targetAmount = ''
-    form.deadline = ''
+    form.category = ''
+    form.amount = ''
   }
   showModal.value = true
 }
@@ -146,39 +176,29 @@ const closeModal = () => {
   editingId.value = null
 }
 
-const openAddFundsModal = (item) => {
-  selectedGoal.value = item
-  fundsForm.amount = ''
-  showAddFundsModal.value = true
-}
+const saveBudget = async () => {
+  if (!form.category || !form.amount) {
+    showToast('Preencha todos os campos.', 'error')
+    return
+  }
 
-const closeAddFundsModal = () => {
-  showAddFundsModal.value = false
-  selectedGoal.value = null
-}
-
-const saveGoal = async () => {
-  if (!form.title || !form.targetAmount) {
-    showToast('Preencha os campos obrigatórios.', 'error')
+  if (!defaultWalletId.value) {
+    showToast('Carteira não encontrada. Recarregue a página.', 'error')
     return
   }
 
   const payload = {
-    title: form.title,
-    target_amount: parseFloat(form.targetAmount),
-    deadline: form.deadline ? form.deadline : null
-  }
-
-  if (!editingId.value) {
-    payload.saved_amount = 0
+    wallet: defaultWalletId.value,
+    category: form.category,
+    amount: parseFloat(form.amount)
   }
 
   try {
     const url = editingId.value 
-      ? `http://localhost:8000/api/finances/goals/${editingId.value}/`
-      : 'http://localhost:8000/api/finances/goals/'
+      ? `http://localhost:8000/api/finances/budgets/${editingId.value}/`
+      : 'http://localhost:8000/api/finances/budgets/'
       
-    const method = editingId.value ? 'PATCH' : 'POST'
+    const method = editingId.value ? 'PUT' : 'POST'
 
     const response = await fetchWithAuth(url, {
       method: method,
@@ -187,42 +207,11 @@ const saveGoal = async () => {
     })
 
     if (response.ok) {
-      showToast(editingId.value ? 'Meta atualizada!' : 'Meta criada com sucesso!', 'success')
+      showToast(editingId.value ? 'Orçamento atualizado!' : 'Orçamento criado!', 'success')
       closeModal()
       loadData()
     } else {
-      showToast('Erro ao salvar a meta.', 'error')
-    }
-  } catch (error) {
-    showToast('Erro de conexão com o terminal.', 'error')
-  }
-}
-
-const addFunds = async () => {
-  if (!fundsForm.amount || parseFloat(fundsForm.amount) <= 0) {
-    showToast('Insira um valor válido.', 'error')
-    return
-  }
-
-  const newSavedAmount = selectedGoal.value.saved_amount + parseFloat(fundsForm.amount)
-
-  const payload = {
-    saved_amount: newSavedAmount
-  }
-
-  try {
-    const response = await fetchWithAuth(`http://localhost:8000/api/finances/goals/${selectedGoal.value.id}/`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-
-    if (response.ok) {
-      showToast('Depósito registado com sucesso!', 'success')
-      closeAddFundsModal()
-      loadData()
-    } else {
-      showToast('Erro ao adicionar fundos.', 'error')
+      showToast('Erro ao salvar orçamento.', 'error')
     }
   } catch (error) {
     showToast('Erro de conexão com o terminal.', 'error')
@@ -243,15 +232,15 @@ const executeDelete = async () => {
   if (!itemToDelete.value) return
 
   try {
-    const response = await fetchWithAuth(`http://localhost:8000/api/finances/goals/${itemToDelete.value}/`, {
+    const response = await fetchWithAuth(`http://localhost:8000/api/finances/budgets/${itemToDelete.value}/`, {
       method: 'DELETE'
     })
 
     if (response.ok) {
-      showToast('Meta excluída com sucesso!', 'success')
+      showToast('Orçamento excluído!', 'success')
       loadData()
     } else {
-      showToast('Erro ao excluir meta.', 'error')
+      showToast('Erro ao excluir orçamento.', 'error')
     }
   } catch (error) {
     showToast('Erro de conexão com o terminal.', 'error')
@@ -267,61 +256,52 @@ const executeDelete = async () => {
   <SideLayout v-if="isAuthorized">
     <div class="page-header">
       <div class="header-titles">
-        <h1>Metas de Poupança</h1>
-        <p>Acompanhe os seus objetivos e sonhos financeiros</p>
+        <h1>Orçamentos</h1>
+        <p>Defina limites de gastos por categoria no mês</p>
       </div>
       <div class="header-actions">
         <button @click="openModal()" class="action-btn btn-primary">
-          <span class="btn-icon">+</span> Nova Meta
+          <span class="btn-icon">+</span> Novo Orçamento
         </button>
       </div>
     </div>
 
-    <div v-if="goals.length === 0" class="empty-state-container">
-      <div class="empty-icon">🎯</div>
-      <h3>Sem metas definidas</h3>
-      <p>Cria a tua primeira meta de poupança para começar a planear o teu futuro.</p>
+    <div v-if="budgetsWithProgress.length === 0" class="empty-state-container">
+      <div class="empty-icon">🚧</div>
+      <h3>Nenhum orçamento definido</h3>
+      <p>Crie orçamentos para controlar seus gastos e receber alertas antes de extrapolar.</p>
     </div>
 
-    <div v-else class="goals-grid">
-      <div v-for="goal in goals" :key="goal.id" class="goal-card">
-        <div class="goal-header">
-          <div>
-            <h3 class="goal-title">{{ goal.title }}</h3>
-            <span v-if="goal.deadline" class="goal-deadline">Data limite: {{ goal.deadline.split('-').reverse().join('/') }}</span>
-          </div>
-          <div class="goal-actions">
-            <button @click="openModal(goal)" class="action-icon" title="Editar">✏️</button>
-            <button @click="confirmDelete(goal.id)" class="action-icon delete-icon" title="Excluir">🗑️</button>
+    <div v-else class="budgets-grid">
+      <div v-for="budget in budgetsWithProgress" :key="budget.id" class="budget-card">
+        <div class="budget-header">
+          <h3 class="budget-title">{{ budget.category }}</h3>
+          <div class="budget-actions">
+            <button @click="openModal(budget)" class="action-icon" title="Editar">✏️</button>
+            <button @click="confirmDelete(budget.id)" class="action-icon delete-icon" title="Excluir">🗑️</button>
           </div>
         </div>
 
-        <div class="goal-values">
+        <div class="budget-values">
           <div class="value-block">
-            <span class="label">Guardado</span>
-            <span class="amount text-positive">{{ formatCurrency(goal.saved_amount) }}</span>
+            <span class="label">Gasto no mês</span>
+            <span :class="['amount', budget.status === 'danger' ? 'text-negative' : '']">{{ formatCurrency(budget.spent) }}</span>
           </div>
           <div class="value-block align-right">
-            <span class="label">Objetivo</span>
-            <span class="amount">{{ formatCurrency(goal.target_amount) }}</span>
+            <span class="label">Limite</span>
+            <span class="amount">{{ formatCurrency(budget.limit) }}</span>
           </div>
         </div>
 
         <div class="progress-container">
           <div class="progress-bar-bg">
-            <div class="progress-bar-fill fill-success" :style="{ width: goal.percentage + '%' }"></div>
+            <div :class="['progress-bar-fill', `fill-${budget.status}`]" :style="{ width: budget.percentage + '%' }"></div>
           </div>
           <div class="progress-labels">
-            <span class="percentage-text">{{ goal.percentage.toFixed(1) }}% concluído</span>
-            <span class="remaining-text">Falta: {{ formatCurrency(goal.target_amount - goal.saved_amount > 0 ? goal.target_amount - goal.saved_amount : 0) }}</span>
+            <span class="percentage-text">{{ budget.percentage.toFixed(1) }}% consumido</span>
+            <span v-if="budget.limit - budget.spent > 0" class="remaining-text">Disponível: {{ formatCurrency(budget.limit - budget.spent) }}</span>
+            <span v-else class="remaining-text text-negative">Estourado: {{ formatCurrency(budget.spent - budget.limit) }}</span>
           </div>
-        </div>
-
-        <div class="goal-footer">
-          <button @click="openAddFundsModal(goal)" class="btn-add-funds" :disabled="goal.percentage >= 100">
-            <span v-if="goal.percentage < 100">💰 Guardar Dinheiro</span>
-            <span v-else>🎉 Meta Concluída!</span>
-          </button>
         </div>
       </div>
     </div>
@@ -331,25 +311,22 @@ const executeDelete = async () => {
     <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
       <div class="modal-container">
         <div class="modal-header">
-          <h2>{{ editingId ? 'Editar Meta' : 'Nova Meta' }}</h2>
+          <h2>{{ editingId ? 'Editar Orçamento' : 'Novo Orçamento' }}</h2>
           <button class="close-btn" @click="closeModal">&times;</button>
         </div>
         
-        <form @submit.prevent="saveGoal" class="modal-form">
+        <form @submit.prevent="saveBudget" class="modal-form">
           <div class="form-group full-width">
-            <label>Nome do Objetivo</label>
-            <input v-model="form.title" type="text" placeholder="Ex: Viagem à Europa" required />
+            <label>Categoria</label>
+            <select v-model="form.category" required :disabled="editingId !== null">
+              <option value="" disabled>Selecione a categoria</option>
+              <option v-for="cat in expenseCategories" :key="cat" :value="cat">{{ cat }}</option>
+            </select>
           </div>
 
-          <div class="form-row">
-            <div class="form-group">
-              <label>Valor Alvo (R$)</label>
-              <input v-model="form.targetAmount" type="number" step="0.01" min="1" placeholder="Ex: 5000.00" required />
-            </div>
-            <div class="form-group">
-              <label>Data Limite (Opcional)</label>
-              <input v-model="form.deadline" type="date" />
-            </div>
+          <div class="form-group full-width">
+            <label>Limite Mensal (R$)</label>
+            <input v-model="form.amount" type="number" step="0.01" min="1" placeholder="Ex: 600.00" required />
           </div>
 
           <div class="modal-actions">
@@ -360,35 +337,14 @@ const executeDelete = async () => {
       </div>
     </div>
 
-    <div v-if="showAddFundsModal" class="modal-overlay" @click.self="closeAddFundsModal">
-      <div class="modal-container small-modal">
-        <div class="modal-header">
-          <h2>Guardar Dinheiro</h2>
-          <button class="close-btn" @click="closeAddFundsModal">&times;</button>
-        </div>
-        
-        <form @submit.prevent="addFunds" class="modal-form">
-          <div class="form-group full-width">
-            <label>Valor a adicionar na meta "{{ selectedGoal?.title }}" (R$)</label>
-            <input v-model="fundsForm.amount" type="number" step="0.01" min="0.01" placeholder="Ex: 100.00" required />
-          </div>
-
-          <div class="modal-actions">
-            <button type="button" class="btn-cancel" @click="closeAddFundsModal">Cancelar</button>
-            <button type="submit" class="btn-save bg-positive">Depositar</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
     <div v-if="showDeleteModal" class="modal-overlay" @click.self="closeDeleteModal">
       <div class="modal-container small-modal">
         <div class="modal-header">
-          <h2 class="text-negative">Excluir Meta</h2>
+          <h2 class="text-negative">Excluir Orçamento</h2>
           <button class="close-btn" @click="closeDeleteModal">&times;</button>
         </div>
         <div class="modal-body">
-          <p>Tens a certeza que desejas excluir esta meta de poupança? Todo o histórico de progresso será perdido.</p>
+          <p>Tem certeza que deseja excluir este orçamento? Seu histórico de gastos da categoria não será afetado.</p>
         </div>
         <div class="modal-actions">
           <button type="button" class="btn-cancel" @click="closeDeleteModal">Cancelar</button>
@@ -414,38 +370,34 @@ const executeDelete = async () => {
 .empty-state-container h3 { color: var(--text-primary); font-size: 1.4rem; margin: 0 0 10px 0; }
 .empty-state-container p { color: var(--text-secondary); margin: 0; font-size: 1rem; }
 
-.goals-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 25px; margin-bottom: 40px; }
-.goal-card { background: var(--bg-card); border-radius: 20px; padding: 25px; box-shadow: var(--shadow-md); border: 1px solid var(--border-color); transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; gap: 20px; }
-.goal-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
+.budgets-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 25px; margin-bottom: 40px; }
+.budget-card { background: var(--bg-card); border-radius: 20px; padding: 25px; box-shadow: var(--shadow-md); border: 1px solid var(--border-color); transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; gap: 20px; }
+.budget-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
 
-.goal-header { display: flex; justify-content: space-between; align-items: flex-start; }
-.goal-title { font-size: 1.2rem; font-weight: 800; color: var(--text-primary); margin: 0 0 4px 0; }
-.goal-deadline { font-size: 0.85rem; color: var(--text-secondary); font-weight: 500; }
-.goal-actions { display: flex; gap: 8px; }
+.budget-header { display: flex; justify-content: space-between; align-items: center; }
+.budget-title { font-size: 1.2rem; font-weight: 800; color: var(--text-primary); margin: 0; }
+.budget-actions { display: flex; gap: 8px; }
 .action-icon { background: var(--input-bg); border: 1px solid var(--border-input); border-radius: 8px; padding: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; font-size: 0.9rem; }
 .action-icon:hover { background: var(--border-color); transform: translateY(-2px); }
 .delete-icon:hover { background: var(--negative-bg); border-color: #fecaca; }
 
-.goal-values { display: flex; justify-content: space-between; align-items: flex-end; }
+.budget-values { display: flex; justify-content: space-between; align-items: flex-end; }
 .value-block { display: flex; flex-direction: column; gap: 4px; }
 .align-right { text-align: right; }
 .label { font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; }
 .amount { font-size: 1.4rem; font-weight: 800; color: var(--text-primary); }
-.text-positive { color: #10b981 !important; }
 
-.progress-container { display: flex; flex-direction: column; gap: 8px; margin-top: 5px; }
+.progress-container { display: flex; flex-direction: column; gap: 8px; }
 .progress-bar-bg { width: 100%; height: 10px; background-color: var(--border-color); border-radius: 5px; overflow: hidden; }
 .progress-bar-fill { height: 100%; border-radius: 5px; transition: width 0.5s ease; }
 .fill-success { background: linear-gradient(90deg, #34d399 0%, #10b981 100%); }
+.fill-warning { background: linear-gradient(90deg, #fbbf24 0%, #f59e0b 100%); }
+.fill-danger { background: linear-gradient(90deg, #f87171 0%, #ef4444 100%); }
 
 .progress-labels { display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 600; }
 .percentage-text { color: var(--text-secondary); }
 .remaining-text { color: var(--text-primary); }
-
-.goal-footer { margin-top: 10px; }
-.btn-add-funds { width: 100%; padding: 12px; background: var(--input-bg); border: 1px solid var(--border-input); border-radius: 12px; font-weight: 700; font-size: 0.95rem; color: var(--text-primary); cursor: pointer; transition: all 0.2s; }
-.btn-add-funds:hover:not(:disabled) { background: #f7b500; color: #0f172a; border-color: #f7b500; }
-.btn-add-funds:disabled { opacity: 0.6; cursor: not-allowed; background: var(--positive-bg); color: #10b981; border-color: transparent; }
+.text-negative { color: #dc2626 !important; }
 
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); backdrop-filter: blur(5px); display: flex; justify-content: center; align-items: center; z-index: 1000; }
 .modal-container { background: var(--bg-card); width: 100%; max-width: 480px; border-radius: 24px; box-shadow: var(--shadow-lg); border: 1px solid var(--border-color); padding: 35px; animation: modalSlideIn 0.3s ease-out; transition: background-color 0.3s, border-color 0.3s; }
@@ -457,12 +409,12 @@ const executeDelete = async () => {
 .close-btn:hover { background: var(--border-color); color: var(--text-primary); }
 
 .modal-form { display: flex; flex-direction: column; gap: 20px; }
-.form-row { display: flex; gap: 20px; }
-.form-group { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.form-group { display: flex; flex-direction: column; gap: 10px; }
 .full-width { width: 100%; }
 .form-group label { font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); }
-.form-group input { width: 100%; box-sizing: border-box; padding: 16px; border: 1px solid var(--border-input); border-radius: 12px; font-size: 1rem; outline: none; background-color: var(--input-bg); color: var(--text-primary); transition: all 0.3s; }
-.form-group input:focus { border-color: #f7b500; background-color: var(--bg-card); box-shadow: 0 0 0 4px rgba(247, 181, 0, 0.1); }
+.form-group input, .form-group select { width: 100%; box-sizing: border-box; padding: 16px; border: 1px solid var(--border-input); border-radius: 12px; font-size: 1rem; outline: none; background-color: var(--input-bg); color: var(--text-primary); transition: all 0.3s; }
+.form-group input:focus, .form-group select:focus { border-color: #f7b500; background-color: var(--bg-card); box-shadow: 0 0 0 4px rgba(247, 181, 0, 0.1); }
+.form-group select:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .modal-actions { display: flex; gap: 15px; margin-top: 15px; }
 .btn-cancel { flex: 1; padding: 16px; background-color: var(--bg-main); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: all 0.2s; }
@@ -470,10 +422,8 @@ const executeDelete = async () => {
 .btn-save { flex: 1; padding: 16px; color: white; border: none; border-radius: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: transform 0.2s; }
 .btn-save:hover { transform: translateY(-2px); }
 .bg-negative { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3); }
-.bg-positive { background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3); }
 
-.text-negative { color: #dc2626 !important; }
 .modal-body p { color: var(--text-secondary); font-size: 1.05rem; line-height: 1.5; margin-bottom: 25px; }
 
-@media (max-width: 768px) { .page-header { flex-direction: column; align-items: flex-start; gap: 15px; } .header-actions { width: 100%; } .action-btn { width: 100%; } .form-row { flex-direction: column; } }
+@media (max-width: 768px) { .page-header { flex-direction: column; align-items: flex-start; gap: 15px; } .header-actions { width: 100%; } .action-btn { width: 100%; } }
 </style>

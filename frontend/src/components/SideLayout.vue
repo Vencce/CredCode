@@ -12,7 +12,7 @@ const userData = reactive({
   name: 'Usuário'
 })
 
-const upcomingExpenses = ref([])
+const alertsList = ref([])
 const showNotifications = ref(false)
 const notificationRef = ref(null)
 
@@ -85,49 +85,89 @@ const fetchWithAuth = async (url, options = {}) => {
   return response
 }
 
-const fetchUpcomingExpenses = async () => {
+const fetchAlerts = async () => {
   try {
-    const res = await fetchWithAuth('http://localhost:8000/api/finances/expenses/')
-    if (res.ok) {
-      const expenses = await res.json()
-      const now = new Date()
-      now.setHours(0,0,0,0)
-      
-      const limiar = new Date()
-      limiar.setDate(now.getDate() + 7)
-      limiar.setHours(23,59,59,999)
+    const expensesRes = await fetchWithAuth('http://localhost:8000/api/finances/expenses/')
+    const budgetsRes = await fetchWithAuth('http://localhost:8000/api/finances/budgets/')
+    
+    let expenses = []
+    let budgets = []
+    
+    if (expensesRes.ok) expenses = await expensesRes.json()
+    if (budgetsRes.ok) budgets = await budgetsRes.json()
 
-      upcomingExpenses.value = expenses
-        .map(e => {
-          const parts = e.date.split('-')
-          let cleanDesc = e.description
-          if (cleanDesc.startsWith('[')) {
-            const closingBracket = cleanDesc.indexOf(']')
-            if (closingBracket !== -1) {
-              cleanDesc = cleanDesc.substring(closingBracket + 1).trim()
-            }
+    const tempAlerts = []
+    const now = new Date()
+    now.setHours(0,0,0,0)
+    const limiar = new Date()
+    limiar.setDate(now.getDate() + 7)
+    limiar.setHours(23,59,59,999)
+
+    expenses.forEach(e => {
+      const parts = e.date.split('-')
+      const rawDate = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2].substring(0, 2)))
+      if (e.amount < 0 && rawDate > now && rawDate <= limiar) {
+        let cleanDesc = e.description
+        if (cleanDesc.startsWith('[')) {
+          const closingBracket = cleanDesc.indexOf(']')
+          if (closingBracket !== -1) {
+            cleanDesc = cleanDesc.substring(closingBracket + 1).trim()
           }
-          return {
-            ...e,
-            rawDate: new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2].substring(0, 2))),
-            cleanDesc: cleanDesc
-          }
+        }
+        tempAlerts.push({
+          id: 'exp-' + e.id,
+          type: 'expense',
+          title: cleanDesc,
+          dateText: `Vence ${rawDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`,
+          amount: Math.abs(e.amount),
+          icon: '💸',
+          priority: 1
         })
-        .filter(e => e.amount < 0 && e.rawDate > now && e.rawDate <= limiar)
-        .sort((a, b) => a.rawDate - b.rawDate)
-    }
+      }
+    })
+
+    const currentMonthExpenses = expenses.filter(e => {
+      const parts = e.date.split('-')
+      const rawDate = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2].substring(0, 2)))
+      return rawDate.getMonth() === now.getMonth() && rawDate.getFullYear() === now.getFullYear() && e.amount < 0
+    })
+
+    const spentByCategory = {}
+    currentMonthExpenses.forEach(e => {
+      const cat = e.category || 'Outros'
+      spentByCategory[cat] = (spentByCategory[cat] || 0) + Math.abs(e.amount)
+    })
+
+    budgets.forEach(b => {
+      const spent = spentByCategory[b.category] || 0
+      const limit = parseFloat(b.amount)
+      const ratio = spent / limit
+
+      if (ratio >= 0.8) {
+        const isExceeded = ratio >= 1.0
+        tempAlerts.push({
+          id: 'bud-' + b.id,
+          type: 'budget',
+          title: isExceeded ? `Orçamento estourado!` : `Atenção ao orçamento!`,
+          dateText: isExceeded ? `${b.category} passou do limite.` : `${b.category} atingiu ${(ratio * 100).toFixed(0)}%.`,
+          amount: spent,
+          icon: isExceeded ? '🚨' : '⚠️',
+          priority: isExceeded ? 3 : 2
+        })
+      }
+    })
+
+    tempAlerts.sort((a, b) => b.priority - a.priority)
+    alertsList.value = tempAlerts
+
   } catch (e) {
   }
 }
 
-const hasNotifications = computed(() => upcomingExpenses.value.length > 0)
+const hasNotifications = computed(() => alertsList.value.length > 0)
 
 const formatCurrency = (value) => {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(value))
-}
-
-const formatDateShort = (rawDate) => {
-  return rawDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 }
 
 const handleClickOutside = (event) => {
@@ -152,7 +192,7 @@ onMounted(async () => {
 
   const token = localStorage.getItem('access_token')
   if (token) {
-    fetchUpcomingExpenses()
+    fetchAlerts()
     try {
       const response = await fetchWithAuth('http://localhost:8000/api/finances/profile/')
       if (response.ok) {
@@ -195,6 +235,11 @@ onUnmounted(() => {
         <RouterLink to="/gastos-futuros" class="nav-item" :class="{ active: isActive('/gastos-futuros') }" @click="closeMobileMenu">
           <span class="icon">📅</span>
           <span v-if="sidebarOpen" class="nav-text">Gastos Futuros</span>
+        </RouterLink>
+
+        <RouterLink to="/orcamentos" class="nav-item" :class="{ active: isActive('/orcamentos') }" @click="closeMobileMenu">
+          <span class="icon">🚧</span>
+          <span v-if="sidebarOpen" class="nav-text">Orçamentos</span>
         </RouterLink>
 
         <RouterLink to="/metas" class="nav-item" :class="{ active: isActive('/metas') }" @click="closeMobileMenu">
@@ -249,31 +294,31 @@ onUnmounted(() => {
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                 <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
               </svg>
-              <span v-if="hasNotifications" class="notification-badge">{{ upcomingExpenses.length }}</span>
+              <span v-if="hasNotifications" class="notification-badge">{{ alertsList.length }}</span>
             </button>
 
             <div v-if="showNotifications" class="notification-dropdown">
               <div class="dropdown-header">
-                <h3>Vencimentos Próximos</h3>
-                <span class="subtitle">Próximos 7 dias</span>
+                <h3>Avisos Importantes</h3>
+                <span class="subtitle">Orçamentos e Vencimentos</span>
               </div>
               <div v-if="!hasNotifications" class="dropdown-empty">
-                🎉 Nenhuma conta vencendo logo.
+                🎉 Tudo sob controle!
               </div>
               <div v-else class="dropdown-list">
-                <div v-for="exp in upcomingExpenses" :key="exp.id" class="dropdown-item">
-                  <div class="item-icon">💸</div>
+                <div v-for="alert in alertsList" :key="alert.id" class="dropdown-item">
+                  <div class="item-icon">{{ alert.icon }}</div>
                   <div class="item-content">
-                    <span class="item-title fw-600">{{ exp.cleanDesc }}</span>
-                    <span class="item-date">Vence {{ formatDateShort(exp.rawDate) }}</span>
+                    <span :class="['item-title fw-600', alert.type === 'budget' ? 'text-negative' : '']">{{ alert.title }}</span>
+                    <span class="item-date">{{ alert.dateText }}</span>
                   </div>
                   <div class="item-amount negative fw-700">
-                    {{ formatCurrency(exp.amount) }}
+                    {{ formatCurrency(alert.amount) }}
                   </div>
                 </div>
               </div>
               <div class="dropdown-footer">
-                <RouterLink to="/gastos-futuros" @click="showNotifications = false">Ver planejamento completo</RouterLink>
+                <RouterLink to="/orcamentos" @click="showNotifications = false">Gerenciar Orçamentos</RouterLink>
               </div>
             </div>
           </div>
@@ -679,6 +724,7 @@ body {
   font-size: 0.95rem;
 }
 
+.text-negative { color: #dc2626; }
 .negative { color: #dc2626; }
 .fw-600 { font-weight: 600; }
 .fw-700 { font-weight: 700; }
