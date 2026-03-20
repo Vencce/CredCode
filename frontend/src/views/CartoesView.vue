@@ -265,6 +265,33 @@ const getCurrentInvoiceTotal = (card) => {
 const currentMonthExpenses = computed(() => getCurrentMonthExpensesForCard(activeCard.value))
 const currentInvoiceTotal = computed(() => getCurrentInvoiceTotal(activeCard.value))
 
+const groupedInvoices = computed(() => {
+  if (!activeCard.value) return []
+  const groups = {}
+
+  activeCard.value.expenses.forEach(exp => {
+    const invoice = getInvoiceForDate(exp.date, activeCard.value.closingDay)
+    const key = `${invoice.year}-${String(invoice.month + 1).padStart(2, '0')}`
+
+    if (!groups[key]) {
+      const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+      groups[key] = {
+        key,
+        label: `${months[invoice.month]} de ${invoice.year}`,
+        total: 0,
+        items: []
+      }
+    }
+    groups[key].items.push(exp)
+    groups[key].total += exp.amount
+  })
+
+  return Object.values(groups).sort((a, b) => a.key.localeCompare(b.key)).map(group => {
+    group.items.sort((a, b) => new Date(a.date) - new Date(b.date))
+    return group
+  })
+})
+
 const addCardExpense = () => {
   const amount = parseFloat(expenseForm.amount)
   if (!expenseForm.description || !amount || amount <= 0) {
@@ -284,7 +311,7 @@ const addCardExpense = () => {
     card.used += amount
 
     if (expenseForm.isInstallment && expenseForm.installmentsCount > 1) {
-      const valPerInstallment = amount / expenseForm.installmentsCount
+      const valPerInstallment = Number((amount / expenseForm.installmentsCount).toFixed(2))
       const baseDate = new Date(expenseForm.date + 'T12:00:00')
       
       for (let i = 1; i <= expenseForm.installmentsCount; i++) {
@@ -337,7 +364,7 @@ const paySpecificExpense = async (expense) => {
   const payload = {
     wallet: defaultWalletId.value,
     description: `[Cartões] Antecipação: ${expense.description}`,
-    amount: -Math.abs(expense.amount),
+    amount: Number((-Math.abs(expense.amount)).toFixed(2)),
     date: new Date().toISOString().split('T')[0],
     category: 'Contas'
   }
@@ -390,7 +417,7 @@ const payInvoice = async (id) => {
       const payload = {
         wallet: defaultWalletId.value,
         description: `[Cartões] Fatura ${card.name} do Mês`,
-        amount: -Math.abs(currentInvoiceTotal.value),
+        amount: Number((-Math.abs(currentInvoiceTotal.value)).toFixed(2)),
         date: new Date().toISOString().split('T')[0],
         category: 'Contas'
       }
@@ -500,7 +527,7 @@ const deleteCard = (id) => {
 
           <div class="card-actions">
             <button @click="openExpenseModal(card.id)" class="btn-action-small btn-card-action">Lançar Compra</button>
-            <button @click="openInvoiceModal(card.id)" class="btn-action-small btn-card-action">Ver Fatura</button>
+            <button @click="openInvoiceModal(card.id)" class="btn-action-small btn-card-action">Ver Faturas</button>
             <button @click="deleteCard(card.id)" class="btn-icon-only"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
           </div>
         </div>
@@ -599,36 +626,45 @@ const deleteCard = (id) => {
     <div v-if="showInvoiceModal" class="modal-overlay" @click.self="closeInvoiceModal">
       <div class="modal-container large-modal">
         <div class="modal-header">
-          <h2>Fatura: {{ activeCard?.name }}</h2>
+          <h2>Faturas: {{ activeCard?.name }}</h2>
           <button class="close-btn" @click="closeInvoiceModal">&times;</button>
         </div>
 
         <div class="invoice-summary">
           <div class="summary-col">
-            <span class="summary-label">Total a Pagar no Mês</span>
+            <span class="summary-label">Fatura Atual (Mês Corrente)</span>
             <strong class="summary-total negative">{{ formatCurrency(currentInvoiceTotal) }}</strong>
           </div>
           <button @click="payInvoice(activeCard?.id)" class="btn-pay-full bg-positive" :disabled="currentInvoiceTotal === 0">
-            Pagar Fatura Completa
+            Pagar Fatura Atual
           </button>
         </div>
 
         <div class="invoice-list-container">
-          <h3 class="list-title">Lançamentos e Parcelas do Mês</h3>
+          <h3 class="list-title">Todas as Faturas</h3>
           
-          <div v-if="currentMonthExpenses.length === 0" class="empty-state">
-            Nenhum lançamento nesta fatura para o mês atual.
+          <div v-if="groupedInvoices.length === 0" class="empty-state">
+            Nenhum lançamento pendente neste cartão.
           </div>
           
-          <div v-else class="invoice-list">
-            <div v-for="exp in currentMonthExpenses" :key="exp.id" class="invoice-item">
-              <div class="invoice-item-info">
-                <span class="invoice-item-date">{{ exp.date.split('-').reverse().join('/') }}</span>
-                <span class="invoice-item-desc">{{ exp.description }}</span>
+          <div v-else class="invoices-wrapper">
+            <div v-for="group in groupedInvoices" :key="group.key" class="invoice-month-group">
+              <div class="month-group-header">
+                <h4 class="month-name">{{ group.label }}</h4>
+                <span class="month-total">{{ formatCurrency(group.total) }}</span>
               </div>
-              <div class="invoice-item-action">
-                <strong class="invoice-item-amount">{{ formatCurrency(exp.amount) }}</strong>
-                <button @click="paySpecificExpense(exp)" class="btn-pay-small">Antecipar</button>
+              
+              <div class="invoice-list-grouped">
+                <div v-for="exp in group.items" :key="exp.id" class="invoice-item">
+                  <div class="invoice-item-info">
+                    <span class="invoice-item-date">{{ exp.date.split('-').reverse().join('/') }}</span>
+                    <span class="invoice-item-desc">{{ exp.description }}</span>
+                  </div>
+                  <div class="invoice-item-action">
+                    <strong class="invoice-item-amount">{{ formatCurrency(exp.amount) }}</strong>
+                    <button @click="paySpecificExpense(exp)" class="btn-pay-small">Antecipar</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -719,11 +755,18 @@ const deleteCard = (id) => {
 .btn-pay-full { padding: 12px 20px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 12px; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2); }
 .btn-pay-full:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(16, 185, 129, 0.3); }
 .btn-pay-full:disabled { opacity: 0.5; cursor: not-allowed; background: var(--border-color); box-shadow: none; color: var(--text-secondary); }
+
 .invoice-list-container { display: flex; flex-direction: column; gap: 15px; }
 .list-title { font-size: 1.1rem; color: var(--text-primary); font-weight: 700; margin: 0; transition: color 0.3s; }
-.invoice-list { display: flex; flex-direction: column; gap: 10px; max-height: 350px; overflow-y: auto; padding-right: 5px; }
-.invoice-list::-webkit-scrollbar { width: 6px; }
-.invoice-list::-webkit-scrollbar-thumb { background-color: var(--border-input); border-radius: 4px; }
+.invoices-wrapper { display: flex; flex-direction: column; gap: 20px; max-height: 400px; overflow-y: auto; padding-right: 5px; }
+.invoices-wrapper::-webkit-scrollbar { width: 6px; }
+.invoices-wrapper::-webkit-scrollbar-thumb { background-color: var(--border-input); border-radius: 4px; }
+.invoice-month-group { display: flex; flex-direction: column; gap: 10px; background: var(--bg-card); padding: 15px; border-radius: 12px; border: 1px solid var(--border-color); }
+.month-group-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-input); padding-bottom: 10px; }
+.month-name { font-size: 1.1rem; color: var(--text-primary); font-weight: 700; margin: 0; text-transform: capitalize; }
+.month-total { font-weight: 800; color: #dc2626; font-size: 1.2rem; }
+.invoice-list-grouped { display: flex; flex-direction: column; gap: 10px; }
+
 .invoice-item { display: flex; justify-content: space-between; align-items: center; padding: 16px; background: var(--input-bg); border: 1px solid var(--border-input); border-radius: 12px; transition: background-color 0.2s, border-color 0.3s; }
 .invoice-item:hover { background: var(--bg-card); }
 .invoice-item-info { display: flex; flex-direction: column; gap: 4px; }
@@ -734,5 +777,6 @@ const deleteCard = (id) => {
 .btn-pay-small { padding: 6px 12px; border: 1px solid #10b981; background: var(--positive-bg); color: #10b981; border-radius: 8px; font-weight: 700; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; }
 .btn-pay-small:hover { background: #10b981; color: white; }
 .empty-state { text-align: center; padding: 30px; color: var(--text-secondary); font-weight: 500; background: var(--input-bg); border-radius: 12px; border: 1px dashed var(--border-input); transition: background-color 0.3s, border-color 0.3s, color 0.3s; }
+
 @media (max-width: 768px) { .page-header { flex-direction: column; align-items: flex-start; gap: 15px; } .header-actions { width: 100%; } .action-btn { width: 100%; } .form-row { flex-direction: column; } .invoice-summary { flex-direction: column; gap: 15px; text-align: center; } .btn-pay-full { width: 100%; } }
 </style>

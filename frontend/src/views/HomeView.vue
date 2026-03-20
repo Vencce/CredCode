@@ -251,9 +251,18 @@ const loadData = async () => {
         const dateParts = dateVal.split('-')
         const formattedDate = dateParts.length === 3 ? `${dateParts[2].substring(0,2)}/${dateParts[1]}/${dateParts[0]}` : dateVal
 
+        // Tratamento visual para remover colchetes antigos da Home
+        let desc = item.description || item.title || item.name || 'Sem descrição'
+        if (desc.startsWith('[')) {
+          const closingBracket = desc.indexOf(']')
+          if (closingBracket !== -1) {
+            desc = desc.substring(closingBracket + 1).trim()
+          }
+        }
+
         return {
           id: item.id,
-          description: item.description || item.title || item.name || 'Sem descrição',
+          description: desc,
           amount: val,
           type: val >= 0 ? 'income' : 'expense',
           date: formattedDate
@@ -348,7 +357,7 @@ const saveTransaction = async () => {
     card.used += finalAmount
 
     if (form.isInstallment && form.installmentsCount > 1) {
-      const valPerInstallment = finalAmount / form.installmentsCount
+      const valPerInstallment = Number((finalAmount / form.installmentsCount).toFixed(2))
       const baseDate = new Date(form.date)
       
       for (let i = 1; i <= form.installmentsCount; i++) {
@@ -359,7 +368,8 @@ const saveTransaction = async () => {
           id: Date.now() + i,
           description: `${form.description} (${i}/${form.installmentsCount})`,
           amount: valPerInstallment,
-          date: installmentDate.toISOString().split('T')[0]
+          date: installmentDate.toISOString().split('T')[0],
+          category: form.category
         })
       }
     } else {
@@ -367,7 +377,8 @@ const saveTransaction = async () => {
         id: Date.now(),
         description: form.description,
         amount: finalAmount,
-        date: form.date
+        date: form.date,
+        category: form.category
       })
     }
 
@@ -388,11 +399,13 @@ const saveTransaction = async () => {
     finalAmount = Math.abs(finalAmount)
   }
 
+  // AGORA ENVIAMOS A CATEGORIA SEPARADAMENTE
   const payload = {
     wallet: defaultWalletId.value,
-    description: `[${form.category}] ${form.description}`,
+    description: form.description,
     amount: finalAmount,
-    date: form.date
+    date: form.date,
+    category: form.category
   }
 
   try {

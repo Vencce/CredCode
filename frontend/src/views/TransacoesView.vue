@@ -119,13 +119,17 @@ const loadData = async () => {
           rawDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2].substring(0, 2)))
         }
 
-        let cat = item.category || 'Geral'
+        let cat = item.category || 'Outros'
         let desc = item.description || 'Sem descrição'
 
+        // Tratamento de segurança para limpar colchetes de registros antigos
         if (desc.startsWith('[')) {
           const closingBracket = desc.indexOf(']')
           if (closingBracket !== -1) {
-            cat = desc.substring(1, closingBracket)
+            // Se por acaso o item não tiver categoria no backend ainda, puxa do colchete
+            if (!item.category) {
+              cat = desc.substring(1, closingBracket)
+            }
             desc = desc.substring(closingBracket + 1).trim()
           }
         }
@@ -330,11 +334,13 @@ const saveTransaction = async () => {
     finalAmount = Math.abs(finalAmount)
   }
 
+  // AGORA ENVIAMOS A CATEGORIA SEPARADAMENTE
   const payload = {
     wallet: defaultWalletId.value,
-    description: `[${form.category}] ${form.description}`,
+    description: form.description,
     amount: finalAmount,
-    date: form.date
+    date: form.date,
+    category: form.category
   }
 
   try {
