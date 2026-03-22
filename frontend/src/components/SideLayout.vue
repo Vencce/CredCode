@@ -223,47 +223,47 @@ onUnmounted(() => {
       
       <nav class="sidebar-nav">
         <RouterLink to="/home" class="nav-item" :class="{ active: isActive('/home') }" @click="closeMobileMenu">
-          <span class="icon">📊</span>
+          <span class="icon"><i class="fa-solid fa-chart-column" style="color: rgb(255, 255, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">Dashboard</span>
         </RouterLink>
 
         <RouterLink to="/transacoes" class="nav-item" :class="{ active: isActive('/transacoes') }" @click="closeMobileMenu">
-          <span class="icon">💸</span>
+          <span class="icon"> <i class="fa-solid fa-money-bill-transfer" style="color: rgb(255, 255, 255);"></i> </span>
           <span v-if="sidebarOpen" class="nav-text">Transações</span>
         </RouterLink>
 
         <RouterLink to="/gastos-futuros" class="nav-item" :class="{ active: isActive('/gastos-futuros') }" @click="closeMobileMenu">
-          <span class="icon">📅</span>
+          <span class="icon"><i class="fa-solid fa-calendar-days" style="color: rgb(248, 251, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">Gastos Futuros</span>
         </RouterLink>
 
         <RouterLink to="/orcamentos" class="nav-item" :class="{ active: isActive('/orcamentos') }" @click="closeMobileMenu">
-          <span class="icon">🚧</span>
+          <span class="icon"><i class="fa-solid fa-wallet" style="color: rgb(255, 255, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">Orçamentos</span>
         </RouterLink>
 
         <RouterLink to="/metas" class="nav-item" :class="{ active: isActive('/metas') }" @click="closeMobileMenu">
-          <span class="icon">🎯</span>
+          <span class="icon"><i class="fa-solid fa-piggy-bank" style="color: rgb(255, 255, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">Metas</span>
         </RouterLink>
 
         <RouterLink to="/cartoes" class="nav-item" :class="{ active: isActive('/cartoes') }" @click="closeMobileMenu">
-          <span class="icon">💳</span>
+          <span class="icon"><i class="fa-brands fa-cc-mastercard" style="color: rgb(255, 255, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">Cartões</span>
         </RouterLink>
         
         <RouterLink to="/investimentos" class="nav-item" :class="{ active: isActive('/investimentos') }" @click="closeMobileMenu">
-          <span class="icon">💰</span>
+          <span class="icon"><i class="fa-solid fa-hand-holding-dollar" style="color: rgb(255, 255, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">Investimentos</span>
         </RouterLink>
 
         <RouterLink to="/relatorios" class="nav-item" :class="{ active: isActive('/relatorios') }" @click="closeMobileMenu">
-          <span class="icon">📈</span>
+          <span class="icon"><i class="fa-solid fa-chart-pie" style="color: rgb(255, 255, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">Relatórios</span>
         </RouterLink>
 
         <RouterLink to="/configuracoes" class="nav-item" :class="{ active: isActive('/configuracoes') }" @click="closeMobileMenu">
-          <span class="icon">⚙️</span>
+          <span class="icon"><i class="fa-solid fa-gear" style="color: rgb(255, 255, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">Configurações</span>
         </RouterLink>
       </nav>
