@@ -33,7 +33,11 @@ const progressPercentage = computed(() => {
 
 const isStepValid = computed(() => {
   if (currentStep.value === 1) return userData.name.trim() !== '';
-  if (currentStep.value === 2) return userData.monthly_income !== null && userData.monthly_income !== '';
+ if (currentStep.value === 2) {
+    return userData.monthly_income !== null && 
+           userData.monthly_income !== '' && 
+           Number(userData.monthly_income) >= 0;
+  }
   if (currentStep.value === 3) return userData.account_balance !== null && userData.account_balance !== '';
   return false;
 });
@@ -135,7 +139,13 @@ const finish = async () => {
               <h2 class="step-title">Qual sua renda mensal?</h2>
               <p class="step-description">Quanto você costuma receber por mês (líquido)?</p>
               <div class="input-group">
-                <input v-model="userData.monthly_income" type="number" placeholder="R$ 0,00" @keyup.enter="isStepValid ? next() : null">
+                <input 
+                  v-model="userData.monthly_income" 
+                  type="number" 
+                  min="0" 
+                  placeholder="R$ 0,00" 
+                  @keyup.enter="isStepValid ? next() : null"
+                >
               </div>
             </div>
 
