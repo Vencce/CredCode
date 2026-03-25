@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import WalletViewSet, ExpenseViewSet, ProfileView, BudgetViewSet, CategoryViewSet, GoalViewSet, InvestmentViewSet, LoanViewSet
+from .views import WalletViewSet, ExpenseViewSet, ProfileView, BudgetViewSet, CategoryViewSet, GoalViewSet, InvestmentViewSet, LoanViewSet, ProfileView, CashFlowView
 
 router = DefaultRouter()
 router.register(r'wallets', WalletViewSet, basename='wallet')
@@ -14,4 +14,5 @@ router.register(r'loans', LoanViewSet, basename='loan')
 urlpatterns = [
     path('', include(router.urls)),
     path('profile/', ProfileView.as_view(), name='profile_update'),
+    path('cash-flow/', CashFlowView.as_view(), name='cash_flow'),
 ]

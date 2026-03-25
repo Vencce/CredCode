@@ -78,6 +78,12 @@ const router = createRouter({
       name: 'emprestimos',
       component: () => import('../views/EmprestimosView.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/fluxo-caixa',
+      name: 'fluxo-caixa',
+      component: () => import('../views/FluxoCaixaView.vue'),
+      meta: { requiresAuth: true }
     }
   ],
 })
