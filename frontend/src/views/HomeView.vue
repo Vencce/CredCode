@@ -23,7 +23,6 @@ const userData = reactive({
 })
 
 const displayedBalance = ref(0)
-// Novas refs para os dados adicionais
 const totalInvestments = ref(0)
 const totalGoals = ref(0)
 
@@ -533,7 +532,6 @@ const formatCurrency = (value) => {
               <h3>Saldo Atual</h3>
               <p class="amount-huge">{{ formatCurrency(displayedBalance) }}</p>
 
-              <!-- Novas informações adicionadas conforme solicitado, mantendo o estilo -->
               <div class="net-worth-row">
                 <div class="net-item">
                   <span class="net-label">Investimentos</span>
@@ -605,7 +603,8 @@ const formatCurrency = (value) => {
       <div class="section-title-wrapper">
         <h2>Transações Recentes</h2>
       </div>
-      <div class="table-container">
+      
+      <div class="table-container desktop-only">
         <table class="transaction-table">
           <thead>
             <tr>
@@ -633,6 +632,19 @@ const formatCurrency = (value) => {
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <div class="mobile-transactions-list mobile-only">
+        <div v-if="recentTransactionsLimited.length === 0" class="empty-state">Nenhuma transação registrada.</div>
+        <div v-for="item in recentTransactionsLimited" :key="item.id" class="mobile-transaction-item">
+          <div class="m-t-info">
+            <span class="m-t-desc">{{ item.description }}</span>
+            <span class="m-t-date">{{ item.date }} • {{ item.type === 'income' ? 'Entrada' : 'Saída' }}</span>
+          </div>
+          <div :class="['m-t-amount', item.type === 'income' ? 'text-positive' : 'text-negative']">
+            {{ item.type === 'income' ? '+' : '-' }} {{ formatCurrency(Math.abs(item.amount)) }}
+          </div>
+        </div>
       </div>
     </section>
 
@@ -786,7 +798,7 @@ const formatCurrency = (value) => {
 .balance-info {
   position: relative;
   z-index: 2;
-  width: 100%; /* Garante que os novos itens ocupem o espaço corretamente */
+  width: 100%;
 }
 
 .balance-card-primary h3 {
@@ -807,7 +819,6 @@ const formatCurrency = (value) => {
   text-shadow: 0 2px 10px rgba(247, 181, 0, 0.2);
 }
 
-/* --- Novos estilos para os detalhes de patrimônio --- */
 .net-worth-row {
   display: flex;
   gap: 25px;
@@ -845,7 +856,6 @@ const formatCurrency = (value) => {
 .net-val.highlight {
   color: #10b981;
 }
-/* --------------------------------------------------- */
 
 .balance-decoration {
   position: absolute;
@@ -1164,6 +1174,8 @@ const formatCurrency = (value) => {
   transform: translateY(0);
   animation: modalSlideIn 0.3s ease-out;
   transition: background-color 0.3s, border-color 0.3s;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 @keyframes modalSlideIn {
@@ -1341,19 +1353,58 @@ const formatCurrency = (value) => {
   box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3);
 }
 
+/* Ocultar elementos para manter responsividade */
+.mobile-only {
+  display: none;
+}
+
+/* RESPONSIVIDADE PARA CELULAR */
 @media (max-width: 1024px) {
   .dashboard-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 768px) {
   .dashboard-header { flex-direction: column; align-items: flex-start; gap: 10px; }
-  .balance-card-primary { padding: 35px 25px; }
-  .amount-huge { font-size: 2.5rem; }
-  .action-panel { flex-direction: column; }
-  .action-btn { max-width: 100%; }
-  .form-row { flex-direction: column; gap: 20px; }
-  /* Ajuste responsivo para os novos itens */
+  .balance-card-primary { padding: 25px 20px; }
+  .amount-huge { font-size: 2.2rem; }
+  
   .net-worth-row { flex-direction: column; gap: 10px; }
   .total-item { border-left: none; padding-left: 0; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 10px; }
+  
+  .action-panel { flex-direction: row; gap: 10px; }
+  .action-btn { padding: 12px 10px; font-size: 0.9rem; }
+  
+  .form-row { flex-direction: column; gap: 15px; }
+  
+  /* Esconde tabela no mobile e mostra a lista */
+  .desktop-only { display: none; }
+  .mobile-only { display: block; }
+  
+  .mobile-transactions-list {
+    background: var(--bg-card);
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    padding: 10px 0;
+  }
+  
+  .mobile-transaction-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border-color);
+  }
+  
+  .mobile-transaction-item:last-child {
+    border-bottom: none;
+  }
+  
+  .m-t-info { display: flex; flex-direction: column; gap: 4px; }
+  .m-t-desc { font-weight: 700; color: var(--text-primary); font-size: 0.95rem; }
+  .m-t-date { font-size: 0.75rem; color: var(--text-secondary); }
+  .m-t-amount { font-weight: 800; font-size: 1rem; }
+  
+  .modal-container { padding: 20px; }
+  .modal-header h2 { font-size: 1.2rem; }
 }
 </style>
