@@ -70,3 +70,15 @@ class Investment(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.type})"
+
+class Loan(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    debtor_name = models.CharField(max_length=150)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    description = models.CharField(max_length=255, blank=True)
+    due_date = models.DateField()
+    is_paid = models.BooleanField(default=False)
+    created_at = models.DateField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.debtor_name} - {self.amount}"

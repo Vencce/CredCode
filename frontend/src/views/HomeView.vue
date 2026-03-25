@@ -23,6 +23,10 @@ const userData = reactive({
 })
 
 const displayedBalance = ref(0)
+// Novas refs para os dados adicionais
+const totalInvestments = ref(0)
+const totalGoals = ref(0)
+
 const totalBalance = computed(() => userData.balance + userData.income - userData.expenses)
 
 const recentTransactions = ref([])
@@ -281,6 +285,47 @@ const loadData = async () => {
       userCategories.value = await catRes.json()
     }
 
+    // Carregar Investimentos (Tradicionais + Cripto)
+    try {
+      const invRes = await fetchWithAuth('http://localhost:8000/api/finances/investments/')
+      if (invRes.ok) {
+        const invData = await invRes.json()
+        let tradTotal = 0
+        invData.forEach(inv => {
+          tradTotal += parseFloat(inv.current_value)
+        })
+        
+        let cryptoTotal = 0
+        const savedCrypto = localStorage.getItem('crypto_wallet')
+        if (savedCrypto) {
+          const parsedCrypto = JSON.parse(savedCrypto)
+          const cryptoIds = Object.keys(parsedCrypto)
+          if (cryptoIds.length > 0) {
+            const cgRes = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${cryptoIds.join(',')}&vs_currencies=brl`)
+            if (cgRes.ok) {
+              const cgData = await cgRes.json()
+              cryptoIds.forEach(id => {
+                if (cgData[id]) {
+                  const amt = typeof parsedCrypto[id] === 'number' ? parsedCrypto[id] : parsedCrypto[id].amount
+                  cryptoTotal += (amt * cgData[id].brl)
+                }
+              })
+            }
+          }
+        }
+        totalInvestments.value = tradTotal + cryptoTotal
+      }
+    } catch (e) {}
+
+    // Carregar Metas (Cofrinho)
+    try {
+      const goalsRes = await fetchWithAuth('http://localhost:8000/api/finances/goals/')
+      if (goalsRes.ok) {
+        const goalsData = await goalsRes.json()
+        totalGoals.value = goalsData.reduce((acc, g) => acc + parseFloat(g.saved_amount), 0)
+      }
+    } catch (e) {}
+
   } catch (error) {
     showToast('Erro ao sincronizar dados com o terminal.', 'error')
   }
@@ -487,6 +532,22 @@ const formatCurrency = (value) => {
             <div class="balance-info">
               <h3>Saldo Atual</h3>
               <p class="amount-huge">{{ formatCurrency(displayedBalance) }}</p>
+
+              <!-- Novas informações adicionadas conforme solicitado, mantendo o estilo -->
+              <div class="net-worth-row">
+                <div class="net-item">
+                  <span class="net-label">Investimentos</span>
+                  <span class="net-val">{{ formatCurrency(totalInvestments) }}</span>
+                </div>
+                <div class="net-item">
+                  <span class="net-label">Metas</span>
+                  <span class="net-val">{{ formatCurrency(totalGoals) }}</span>
+                </div>
+                <div class="net-item total-item">
+                  <span class="net-label">Patrimônio Total</span>
+                  <span class="net-val highlight">{{ formatCurrency(displayedBalance + totalInvestments + totalGoals) }}</span>
+                </div>
+              </div>
             </div>
             <div class="balance-decoration">
               <div class="circle circle-1"></div>
@@ -725,6 +786,7 @@ const formatCurrency = (value) => {
 .balance-info {
   position: relative;
   z-index: 2;
+  width: 100%; /* Garante que os novos itens ocupem o espaço corretamente */
 }
 
 .balance-card-primary h3 {
@@ -744,6 +806,46 @@ const formatCurrency = (value) => {
   letter-spacing: -1.5px;
   text-shadow: 0 2px 10px rgba(247, 181, 0, 0.2);
 }
+
+/* --- Novos estilos para os detalhes de patrimônio --- */
+.net-worth-row {
+  display: flex;
+  gap: 25px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  flex-wrap: wrap;
+}
+
+.net-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.net-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+.net-val {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.total-item {
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  padding-left: 20px;
+}
+
+.net-val.highlight {
+  color: #10b981;
+}
+/* --------------------------------------------------- */
 
 .balance-decoration {
   position: absolute;
@@ -1250,5 +1352,8 @@ const formatCurrency = (value) => {
   .action-panel { flex-direction: column; }
   .action-btn { max-width: 100%; }
   .form-row { flex-direction: column; gap: 20px; }
+  /* Ajuste responsivo para os novos itens */
+  .net-worth-row { flex-direction: column; gap: 10px; }
+  .total-item { border-left: none; padding-left: 0; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 10px; }
 }
 </style>

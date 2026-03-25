@@ -5,8 +5,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import User
-from .serializers import RegisterSerializer, WalletSerializer, ExpenseSerializer, ProfileSerializer, BudgetSerializer, CategorySerializer, GoalSerializer, InvestmentSerializer
-from .models import Wallet, Expense, Profile, Budget, Category, Goal, Investment
+from .serializers import RegisterSerializer, WalletSerializer, ExpenseSerializer, ProfileSerializer, BudgetSerializer, CategorySerializer, GoalSerializer, InvestmentSerializer, LoanSerializer
+from .models import Wallet, Expense, Profile, Budget, Category, Goal, Investment, Loan
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -97,3 +97,13 @@ class CustomTokenSerializer(TokenObtainPairSerializer):
 
 class CustomLoginView(TokenObtainPairView):
     serializer_class = CustomTokenSerializer
+
+class LoanViewSet(viewsets.ModelViewSet):
+    serializer_class = LoanSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        return Loan.objects.filter(user=self.request.user)
+        
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)

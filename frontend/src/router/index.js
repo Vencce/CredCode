@@ -73,6 +73,12 @@ const router = createRouter({
       component: () => import('../views/OrcamentosView.vue'),
       meta: { requiresAuth: true }
     },
+    {
+      path: '/emprestimos',
+      name: 'emprestimos',
+      component: () => import('../views/EmprestimosView.vue'),
+      meta: { requiresAuth: true }
+    }
   ],
 })
 

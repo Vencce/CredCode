@@ -257,6 +257,11 @@ onUnmounted(() => {
           <span v-if="sidebarOpen" class="nav-text">Investimentos</span>
         </RouterLink>
 
+        <RouterLink to="/emprestimos" class="nav-item" :class="{ active: isActive('/emprestimos') }" @click="closeMobileMenu">
+          <span class="icon"><i class="fa-solid fa-handshake-angle" style="color: rgb(255, 255, 255);"></i></span>
+          <span v-if="sidebarOpen" class="nav-text">Empréstimos</span>
+        </RouterLink>
+
         <RouterLink to="/relatorios" class="nav-item" :class="{ active: isActive('/relatorios') }" @click="closeMobileMenu">
           <span class="icon"><i class="fa-solid fa-chart-pie" style="color: rgb(255, 255, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">Relatórios</span>

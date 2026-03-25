@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile, Wallet, Expense, Budget, Category, Goal, Investment
+from .models import Profile, Wallet, Expense, Budget, Category, Goal, Investment, Loan
 from django.contrib.auth.models import User
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -62,5 +62,11 @@ class GoalSerializer(serializers.ModelSerializer):
 class InvestmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Investment
+        fields = '__all__'
+        read_only_fields = ['user']
+
+class LoanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Loan
         fields = '__all__'
         read_only_fields = ['user']
