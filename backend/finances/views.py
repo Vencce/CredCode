@@ -4,11 +4,15 @@ from rest_framework import generics, viewsets, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from django.db.models import Sum
+from django.contrib.auth.models import User
 from django.utils import timezone
 from datetime import timedelta
-from django.contrib.auth.models import User
-from .serializers import RegisterSerializer, WalletSerializer, ExpenseSerializer, ProfileSerializer, BudgetSerializer, CategorySerializer, GoalSerializer, InvestmentSerializer, LoanSerializer
+from django.db.models import Count
+from .serializers import (
+    RegisterSerializer, WalletSerializer, ExpenseSerializer, 
+    ProfileSerializer, BudgetSerializer, CategorySerializer, 
+    GoalSerializer, InvestmentSerializer, LoanSerializer
+)
 from .models import Wallet, Expense, Profile, Budget, Category, Goal, Investment, Loan
 
 class RegisterView(generics.CreateAPIView):
@@ -33,7 +37,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Category.objects.filter(user=self.request.user)
         
-    def perform_create(self, serializer): 
+    def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
 class ExpenseViewSet(viewsets.ModelViewSet):
@@ -70,6 +74,16 @@ class InvestmentViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
+class LoanViewSet(viewsets.ModelViewSet):
+    serializer_class = LoanSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        return Loan.objects.filter(user=self.request.user)
+        
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
 class ProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -92,25 +106,6 @@ class ProfileView(APIView):
             return Response({"message": "Perfil atualizado com sucesso!", "has_profile": True}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class CustomTokenSerializer(TokenObtainPairSerializer):
-    def validate(self, attrs):
-        data = super().validate(attrs)
-        data['has_profile'] = Profile.objects.filter(user=self.user).exists()
-        return data
-
-class CustomLoginView(TokenObtainPairView):
-    serializer_class = CustomTokenSerializer
-
-class LoanViewSet(viewsets.ModelViewSet):
-    serializer_class = LoanSerializer
-    permission_classes = [IsAuthenticated]
-    
-    def get_queryset(self):
-        return Loan.objects.filter(user=self.request.user)
-        
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-
 class CashFlowView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -122,18 +117,25 @@ class CashFlowView(APIView):
         profile = Profile.objects.get(user=user)
         base_balance = float(profile.account_balance)
         
-        # Saldo inicial considerando transações passadas
         expenses_past = Expense.objects.filter(wallet__user=user, date__lte=today)
         current_balance = base_balance + sum(float(e.amount) for e in expenses_past)
 
-        # Buscar eventos futuros
-        future_expenses = Expense.objects.filter(wallet__user=user, date__gt=today, date__lte=end_date)
-        future_loans = Loan.objects.filter(user=user, is_paid=False, due_date__gt=today, due_date__lte=end_date)
+        future_expenses = Expense.objects.filter(
+            wallet__user=user, 
+            date__gt=today, 
+            date__lte=end_date
+        )
+
+        future_loans = Loan.objects.filter(
+            user=user, 
+            is_paid=False, 
+            due_date__gt=today, 
+            due_date__lte=end_date
+        )
 
         timeline = []
         running_balance = current_balance
         
-        # Gerar um ponto para cada um dos 30 dias (garante que o gráfico não fique vazio)
         for i in range(31):
             day = today + timedelta(days=i)
             day_expenses = sum(float(e.amount) for e in future_expenses if e.date == day)
@@ -148,6 +150,67 @@ class CashFlowView(APIView):
 
         return Response({
             "current_balance": round(current_balance, 2),
-            "projected_balance_30d": round(running_balance, 2), # Nome exato
+            "projected_balance_30d": round(running_balance, 2),
             "timeline": timeline
         })
+
+class SuggestCategoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        description = request.query_params.get('description', '').strip().lower()
+        if not description or len(description) < 3:
+            return Response({"category": None})
+
+        smart_keywords = {
+            'mercado': 'Alimentação',
+            'supermercado': 'Alimentação',
+            'ifood': 'Alimentação',
+            'padaria': 'Alimentação',
+            'restaurante': 'Alimentação',
+            'luz': 'Moradia',
+            'energia': 'Moradia',
+            'água': 'Moradia',
+            'agua': 'Moradia',
+            'aluguel': 'Moradia',
+            'internet': 'Despesas Fixas',
+            'telefone': 'Despesas Fixas',
+            'celular': 'Despesas Fixas',
+            'netflix': 'Lazer',
+            'spotify': 'Lazer',
+            'cinema': 'Lazer',
+            'uber': 'Transporte',
+            '99': 'Transporte',
+            'gasolina': 'Transporte',
+            'posto': 'Transporte',
+            'farmácia': 'Saúde',
+            'farmacia': 'Saúde',
+            'médico': 'Saúde',
+            'medico': 'Saúde',
+            'salário': 'Salário',
+            'salario': 'Salário',
+            'pix': 'Transferência'
+        }
+
+        for keyword, category in smart_keywords.items():
+            if keyword in description:
+                return Response({"category": category})
+        
+        suggestion = Expense.objects.filter(
+            wallet__user=request.user,
+            description__icontains=description
+        ).values('category').annotate(count=Count('category')).order_by('-count').first()
+
+        if suggestion and suggestion['category']:
+            return Response({"category": suggestion['category']})
+            
+        return Response({"category": None})
+
+class CustomTokenSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        data['has_profile'] = Profile.objects.filter(user=self.user).exists()
+        return data
+
+class CustomLoginView(TokenObtainPairView):
+    serializer_class = CustomTokenSerializer

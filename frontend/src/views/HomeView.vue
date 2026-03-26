@@ -284,7 +284,6 @@ const loadData = async () => {
       userCategories.value = await catRes.json()
     }
 
-    // Carregar Investimentos (Tradicionais + Cripto)
     try {
       const invRes = await fetchWithAuth('http://localhost:8000/api/finances/investments/')
       if (invRes.ok) {
@@ -316,7 +315,6 @@ const loadData = async () => {
       }
     } catch (e) {}
 
-    // Carregar Metas (Cofrinho)
     try {
       const goalsRes = await fetchWithAuth('http://localhost:8000/api/finances/goals/')
       if (goalsRes.ok) {
@@ -360,6 +358,31 @@ const currentCategories = computed(() => {
   return userCategories.value
     .filter(c => c.type === modalType.value)
     .map(c => c.name)
+})
+
+let debounceTimer = null
+
+watch(() => form.description, (newVal) => {
+  clearTimeout(debounceTimer)
+  if (newVal && newVal.length >= 3 && showModal.value) {
+    debounceTimer = setTimeout(async () => {
+      try {
+        const res = await fetchWithAuth(`http://localhost:8000/api/finances/suggest-category/?description=${encodeURIComponent(newVal)}`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data.category) {
+            const matchedCategory = currentCategories.value.find(c => c.toLowerCase() === data.category.toLowerCase())
+            
+            if (matchedCategory && form.category !== matchedCategory) {
+              form.category = matchedCategory
+              showToast('✨ Categoria preenchida automaticamente', 'success')
+            }
+          }
+        }
+      } catch (e) {
+      }
+    }, 600)
+  }
 })
 
 const openModal = (type) => {
@@ -1174,8 +1197,6 @@ const formatCurrency = (value) => {
   transform: translateY(0);
   animation: modalSlideIn 0.3s ease-out;
   transition: background-color 0.3s, border-color 0.3s;
-  max-height: 90vh;
-  overflow-y: auto;
 }
 
 @keyframes modalSlideIn {
@@ -1323,7 +1344,7 @@ const formatCurrency = (value) => {
 }
 
 .btn-cancel:hover {
-  background-color: var(--border-color);
+  background: var(--border-color);
   color: var(--text-primary);
 }
 
@@ -1353,30 +1374,32 @@ const formatCurrency = (value) => {
   box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3);
 }
 
-/* Ocultar elementos para manter responsividade */
 .mobile-only {
   display: none;
 }
 
-/* RESPONSIVIDADE PARA CELULAR */
 @media (max-width: 1024px) {
   .dashboard-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 768px) {
   .dashboard-header { flex-direction: column; align-items: flex-start; gap: 10px; }
-  .balance-card-primary { padding: 25px 20px; }
-  .amount-huge { font-size: 2.2rem; }
+  .balance-card-primary { padding: 30px 25px; }
+  .amount-huge { font-size: 2.8rem; }
   
-  .net-worth-row { flex-direction: column; gap: 10px; }
-  .total-item { border-left: none; padding-left: 0; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 10px; }
+  .net-worth-row { flex-direction: column; gap: 12px; }
+  .total-item { border-left: none; padding-left: 0; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 12px; }
+  
+  .summary-cards { flex-direction: row; gap: 15px; }
+  .summary-cards .card { padding: 15px; flex-direction: column; text-align: center; gap: 10px; }
+  .summary-cards .card-icon-wrapper { width: 40px; height: 40px; font-size: 1.2rem; }
+  .summary-cards .amount { font-size: 1.3rem; }
   
   .action-panel { flex-direction: row; gap: 10px; }
-  .action-btn { padding: 12px 10px; font-size: 0.9rem; }
+  .action-btn { padding: 12px; font-size: 0.95rem; }
   
   .form-row { flex-direction: column; gap: 15px; }
   
-  /* Esconde tabela no mobile e mostra a lista */
   .desktop-only { display: none; }
   .mobile-only { display: block; }
   
@@ -1384,7 +1407,7 @@ const formatCurrency = (value) => {
     background: var(--bg-card);
     border-radius: 16px;
     border: 1px solid var(--border-color);
-    padding: 10px 0;
+    padding: 5px 0;
   }
   
   .mobile-transaction-item {
@@ -1404,7 +1427,6 @@ const formatCurrency = (value) => {
   .m-t-date { font-size: 0.75rem; color: var(--text-secondary); }
   .m-t-amount { font-weight: 800; font-size: 1rem; }
   
-  .modal-container { padding: 20px; }
-  .modal-header h2 { font-size: 1.2rem; }
+  .modal-container { padding: 25px 20px; max-height: 85vh; overflow-y: auto; }
 }
 </style>

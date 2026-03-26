@@ -215,60 +215,60 @@ onUnmounted(() => {
   <div class="app-layout">
     <div v-if="isMobileMenuOpen" class="mobile-overlay" @click="closeMobileMenu"></div>
 
-    <aside :class="['sidebar', { closed: !sidebarOpen }]">
+    <aside :class="['sidebar', { closed: !sidebarOpen, 'mobile-open': isMobileMenuOpen }]">
       <div class="sidebar-brand">
         <h2 v-if="sidebarOpen" class="main-logo">CRED<span>CODE</span></h2>
         <h2 v-else class="main-logo-collapsed">C<span>C</span></h2>
       </div>
       
       <nav class="sidebar-nav">
-        <RouterLink to="/home" class="nav-item" :class="{ active: isActive('/home') }">
-          <span class="icon"><i class="fa-solid fa-chart-column"></i></span>
+        <RouterLink to="/home" class="nav-item" :class="{ active: isActive('/home') }" @click="closeMobileMenu">
+          <span class="icon"><i class="fa-solid fa-chart-column" style="color: rgb(255, 255, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">Dashboard</span>
         </RouterLink>
 
-        <RouterLink to="/transacoes" class="nav-item" :class="{ active: isActive('/transacoes') }">
-          <span class="icon"><i class="fa-solid fa-money-bill-transfer"></i></span>
+        <RouterLink to="/transacoes" class="nav-item" :class="{ active: isActive('/transacoes') }" @click="closeMobileMenu">
+          <span class="icon"> <i class="fa-solid fa-money-bill-transfer" style="color: rgb(255, 255, 255);"></i> </span>
           <span v-if="sidebarOpen" class="nav-text">Transações</span>
         </RouterLink>
 
-        <RouterLink to="/gastos-futuros" class="nav-item" :class="{ active: isActive('/gastos-futuros') }">
-          <span class="icon"><i class="fa-solid fa-calendar-days"></i></span>
+        <RouterLink to="/gastos-futuros" class="nav-item" :class="{ active: isActive('/gastos-futuros') }" @click="closeMobileMenu">
+          <span class="icon"><i class="fa-solid fa-calendar-days" style="color: rgb(248, 251, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">Gastos Futuros</span>
         </RouterLink>
 
-        <RouterLink to="/orcamentos" class="nav-item" :class="{ active: isActive('/orcamentos') }">
-          <span class="icon"><i class="fa-solid fa-wallet"></i></span>
+        <RouterLink to="/orcamentos" class="nav-item" :class="{ active: isActive('/orcamentos') }" @click="closeMobileMenu">
+          <span class="icon"><i class="fa-solid fa-wallet" style="color: rgb(255, 255, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">Orçamentos</span>
         </RouterLink>
 
-        <RouterLink to="/metas" class="nav-item" :class="{ active: isActive('/metas') }">
-          <span class="icon"><i class="fa-solid fa-piggy-bank"></i></span>
+        <RouterLink to="/metas" class="nav-item" :class="{ active: isActive('/metas') }" @click="closeMobileMenu">
+          <span class="icon"><i class="fa-solid fa-piggy-bank" style="color: rgb(255, 255, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">Metas</span>
         </RouterLink>
 
-        <RouterLink to="/cartoes" class="nav-item" :class="{ active: isActive('/cartoes') }">
-          <span class="icon"><i class="fa-brands fa-cc-mastercard"></i></span>
+        <RouterLink to="/cartoes" class="nav-item" :class="{ active: isActive('/cartoes') }" @click="closeMobileMenu">
+          <span class="icon"><i class="fa-brands fa-cc-mastercard" style="color: rgb(255, 255, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">Cartões</span>
         </RouterLink>
         
-        <RouterLink to="/investimentos" class="nav-item" :class="{ active: isActive('/investimentos') }">
-          <span class="icon"><i class="fa-solid fa-hand-holding-dollar"></i></span>
+        <RouterLink to="/investimentos" class="nav-item" :class="{ active: isActive('/investimentos') }" @click="closeMobileMenu">
+          <span class="icon"><i class="fa-solid fa-hand-holding-dollar" style="color: rgb(255, 255, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">Investimentos</span>
         </RouterLink>
 
-        <RouterLink to="/emprestimos" class="nav-item" :class="{ active: isActive('/emprestimos') }">
-          <span class="icon"><i class="fa-solid fa-handshake-angle"></i></span>
+        <RouterLink to="/emprestimos" class="nav-item" :class="{ active: isActive('/emprestimos') }" @click="closeMobileMenu">
+          <span class="icon"><i class="fa-solid fa-handshake-angle" style="color: rgb(255, 255, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">Empréstimos</span>
         </RouterLink>
 
-        <RouterLink to="/relatorios" class="nav-item" :class="{ active: isActive('/relatorios') }">
-          <span class="icon"><i class="fa-solid fa-chart-pie"></i></span>
+        <RouterLink to="/relatorios" class="nav-item" :class="{ active: isActive('/relatorios') }" @click="closeMobileMenu">
+          <span class="icon"><i class="fa-solid fa-chart-pie" style="color: rgb(255, 255, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">Relatórios</span>
         </RouterLink>
 
-        <RouterLink to="/configuracoes" class="nav-item" :class="{ active: isActive('/configuracoes') }">
-          <span class="icon"><i class="fa-solid fa-gear"></i></span>
+        <RouterLink to="/configuracoes" class="nav-item" :class="{ active: isActive('/configuracoes') }" @click="closeMobileMenu">
+          <span class="icon"><i class="fa-solid fa-gear" style="color: rgb(255, 255, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">Configurações</span>
         </RouterLink>
       </nav>
@@ -282,12 +282,17 @@ onUnmounted(() => {
     <div class="main-wrapper">
       <header class="top-header">
         <div class="topbar-left">
-          <div class="breadcrumb">
+          <button class="btn-hamburguer" @click="toggleMobileMenu">
+            <span>☰</span>
+          </button>
+          
+          <div class="breadcrumb" v-if="!isMobileMenuOpen">
             <span>Terminal Financeiro</span>
           </div>
         </div>
 
         <div class="topbar-right">
+
           <div class="notification-container" ref="notificationRef">
             <button class="icon-btn notification-btn" @click="showNotifications = !showNotifications">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -429,7 +434,6 @@ body {
   transition: background-color 0.3s;
 }
 
-/* Sidebar Desktop */
 .sidebar {
   width: 280px;
   background-color: var(--sidebar-bg);
@@ -525,6 +529,10 @@ body {
   margin: 0 12px;
 }
 
+.sidebar.closed .nav-item:hover:not(.active) {
+  transform: translateY(-2px);
+}
+
 .icon {
   margin-right: 16px;
   font-size: 1.3rem;
@@ -560,7 +568,11 @@ body {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Main Wrapper */
+.toggle-btn:hover {
+  transform: scale(1.15);
+  background-color: #e6a800;
+}
+
 .main-wrapper {
   flex: 1;
   display: flex;
@@ -577,6 +589,12 @@ body {
   padding: 0 40px;
   border-bottom: 1px solid var(--border-color);
   transition: background-color 0.3s, border-color 0.3s;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 15px;
 }
 
 .breadcrumb {
@@ -606,6 +624,155 @@ body {
   transition: all 0.2s;
 }
 
+.icon-btn:hover {
+  background-color: var(--border-color);
+  color: var(--text-primary);
+  transform: translateY(-2px);
+}
+
+.notification-container {
+  position: relative;
+}
+
+.notification-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background-color: #ef4444;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--topbar-bg);
+}
+
+.notification-dropdown {
+  position: absolute;
+  top: calc(100% + 15px);
+  right: -50px;
+  width: 320px;
+  background-color: var(--bg-card);
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: dropdownIn 0.2s ease-out;
+  z-index: 1000;
+}
+
+@keyframes dropdownIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.dropdown-header {
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-main);
+}
+
+.dropdown-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dropdown-header .subtitle {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.dropdown-empty {
+  padding: 30px 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.dropdown-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.dropdown-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dropdown-list::-webkit-scrollbar-thumb {
+  background-color: var(--border-input);
+  border-radius: 4px;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--border-color);
+  transition: background-color 0.2s;
+}
+
+.dropdown-item:hover {
+  background-color: var(--bg-main);
+}
+
+.dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.item-icon {
+  font-size: 1.2rem;
+}
+
+.item-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.item-title {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.item-date {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.item-amount {
+  font-size: 0.95rem;
+}
+
+.text-negative { color: #dc2626; }
+.negative { color: #dc2626; }
+.fw-600 { font-weight: 600; }
+.fw-700 { font-weight: 700; }
+
+.dropdown-footer {
+  padding: 12px;
+  text-align: center;
+  background-color: var(--bg-main);
+  border-top: 1px solid var(--border-color);
+}
+
+.dropdown-footer a {
+  font-size: 0.85rem;
+  color: #f7b500;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.dropdown-footer a:hover {
+  text-decoration: underline;
+}
+
 .user-profile-header {
   display: flex;
   align-items: center;
@@ -628,12 +795,50 @@ body {
   font-weight: 800;
 }
 
+.user-name-header {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  transition: color 0.3s;
+}
+
+.btn-logout-header {
+  background-color: rgba(225, 29, 72, 0.1);
+  color: #e11d48;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-logout-header:hover {
+  background-color: rgba(225, 29, 72, 0.2);
+  transform: translateY(-2px);
+}
+
+.btn-hamburguer {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-primary);
+  padding: 8px;
+  font-size: 1.6rem;
+  border-radius: 8px;
+  background-color: var(--bg-main);
+}
+
 .content-body {
   padding: 40px;
   flex: 1;
 }
 
-/* Bottom Nav Style */
 .bottom-nav {
   position: fixed;
   bottom: 0;
@@ -641,7 +846,7 @@ body {
   width: 100%;
   height: 75px;
   background: var(--bg-card);
-  display: none; /* Desktop hidden */
+  display: none;
   justify-content: space-around;
   align-items: center;
   padding: 0 10px;
@@ -673,7 +878,6 @@ body {
   transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-/* Efeito de subir o selecionado */
 .bottom-item.active {
   color: #f7b500;
 }
@@ -697,7 +901,6 @@ body {
   opacity: 1;
 }
 
-/* Botão de Investir (Destaque Central) */
 .bottom-icon-center {
   background: #0f172a;
   color: white;
@@ -716,7 +919,6 @@ body {
   color: #0f172a;
 }
 
-/* Responsividade */
 @media (max-width: 1024px) {
   .sidebar {
     display: none;
@@ -726,14 +928,29 @@ body {
     display: flex;
   }
 
+  .btn-hamburguer {
+    display: block;
+  }
+
+  .mobile-overlay {
+    position: fixed;
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 99;
+  }
+  
   .top-header {
     padding: 0 20px;
     height: 70px;
   }
-
+  
   .content-body {
     padding: 20px;
-    padding-bottom: 90px; /* Padding extra para não cobrir conteúdo */
+    padding-bottom: 90px;
   }
 
   .main-wrapper {
@@ -742,8 +959,24 @@ body {
 }
 
 @media (max-width: 480px) {
+  .user-profile-header {
+    background-color: transparent;
+    border: none;
+    padding: 0;
+  }
   .user-name-header {
     display: none;
+  }
+  .btn-logout-header {
+    padding: 10px 16px;
+    font-size: 0.85rem;
+  }
+  .topbar-right {
+    gap: 16px;
+  }
+  .notification-dropdown {
+    width: 280px;
+    right: -40px;
   }
 }
 </style>
