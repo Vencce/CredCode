@@ -58,7 +58,7 @@ const initChart = (timeline) => {
 
 const loadData = async () => {
   try {
-    const res = await fetchWithAuth('http://localhost:8000/api/finances/cash-flow/')
+    const res = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/cash-flow/')
     if (res.ok) {
       const result = await res.json()
       flowData.value = result

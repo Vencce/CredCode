@@ -49,7 +49,7 @@ const fetchWithAuth = async (url, options = {}) => {
     const refreshToken = localStorage.getItem('refresh_token')
     if (refreshToken) {
       try {
-        const refreshResponse = await fetch('http://localhost:8000/api/auth/refresh/', {
+        const refreshResponse = await fetch('https://credcode-backend.onrender.com/api/auth/refresh/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refresh: refreshToken })
@@ -84,18 +84,18 @@ const fetchWithAuth = async (url, options = {}) => {
 
 const loadData = async () => {
   try {
-    const walletRes = await fetchWithAuth('http://localhost:8000/api/finances/wallets/')
+    const walletRes = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/wallets/')
     if (walletRes.ok) {
       const wallets = await walletRes.json()
       if (wallets.length > 0) defaultWalletId.value = wallets[0].id
     }
 
-    const expensesRes = await fetchWithAuth('http://localhost:8000/api/finances/expenses/')
+    const expensesRes = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/expenses/')
     if (expensesRes.ok) {
       expenses.value = await expensesRes.json()
     }
 
-    const budgetsRes = await fetchWithAuth('http://localhost:8000/api/finances/budgets/')
+    const budgetsRes = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/budgets/')
     if (budgetsRes.ok) {
       budgets.value = await budgetsRes.json()
     }
@@ -195,8 +195,8 @@ const saveBudget = async () => {
 
   try {
     const url = editingId.value 
-      ? `http://localhost:8000/api/finances/budgets/${editingId.value}/`
-      : 'http://localhost:8000/api/finances/budgets/'
+      ? `https://credcode-backend.onrender.com/api/finances/budgets/${editingId.value}/`
+      : 'https://credcode-backend.onrender.com/api/finances/budgets/'
       
     const method = editingId.value ? 'PUT' : 'POST'
 
@@ -232,7 +232,7 @@ const executeDelete = async () => {
   if (!itemToDelete.value) return
 
   try {
-    const response = await fetchWithAuth(`http://localhost:8000/api/finances/budgets/${itemToDelete.value}/`, {
+    const response = await fetchWithAuth(`https://credcode-backend.onrender.com/api/finances/budgets/${itemToDelete.value}/`, {
       method: 'DELETE'
     })
 

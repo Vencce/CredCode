@@ -157,7 +157,7 @@ const fetchWithAuth = async (url, options = {}) => {
     const refreshToken = localStorage.getItem('refresh_token')
     if (refreshToken) {
       try {
-        const refreshResponse = await fetch('http://localhost:8000/api/auth/refresh/', {
+        const refreshResponse = await fetch('https://credcode-backend.onrender.com/api/auth/refresh/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refresh: refreshToken })
@@ -201,7 +201,7 @@ const loadData = async () => {
   try {
     let baseBalance = 0
     
-    const profileRes = await fetchWithAuth('http://localhost:8000/api/finances/profile/')
+    const profileRes = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/profile/')
     
     if (profileRes.ok) {
       const data = await profileRes.json()
@@ -211,7 +211,7 @@ const loadData = async () => {
       }
     }
 
-    const walletRes = await fetchWithAuth('http://localhost:8000/api/finances/wallets/')
+    const walletRes = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/wallets/')
     
     if (walletRes.ok) {
       const wallets = await walletRes.json()
@@ -221,7 +221,7 @@ const loadData = async () => {
           baseBalance = parseFloat(wallets[0].balance) || 0
         }
       } else {
-        const createWalletRes = await fetchWithAuth('http://localhost:8000/api/finances/wallets/', {
+        const createWalletRes = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/wallets/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: 'Carteira Principal', balance: baseBalance })
@@ -235,7 +235,7 @@ const loadData = async () => {
 
     userData.balance = baseBalance
 
-    const expensesRes = await fetchWithAuth('http://localhost:8000/api/finances/expenses/')
+    const expensesRes = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/expenses/')
 
     if (expensesRes.ok) {
       const expenses = await expensesRes.json()
@@ -279,13 +279,13 @@ const loadData = async () => {
       })
     }
 
-    const catRes = await fetchWithAuth('http://localhost:8000/api/finances/categories/')
+    const catRes = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/categories/')
     if (catRes.ok) {
       userCategories.value = await catRes.json()
     }
 
     try {
-      const invRes = await fetchWithAuth('http://localhost:8000/api/finances/investments/')
+      const invRes = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/investments/')
       if (invRes.ok) {
         const invData = await invRes.json()
         let tradTotal = 0
@@ -316,7 +316,7 @@ const loadData = async () => {
     } catch (e) {}
 
     try {
-      const goalsRes = await fetchWithAuth('http://localhost:8000/api/finances/goals/')
+      const goalsRes = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/goals/')
       if (goalsRes.ok) {
         const goalsData = await goalsRes.json()
         totalGoals.value = goalsData.reduce((acc, g) => acc + parseFloat(g.saved_amount), 0)
@@ -367,7 +367,7 @@ watch(() => form.description, (newVal) => {
   if (newVal && newVal.length >= 3 && showModal.value) {
     debounceTimer = setTimeout(async () => {
       try {
-        const res = await fetchWithAuth(`http://localhost:8000/api/finances/suggest-category/?description=${encodeURIComponent(newVal)}`)
+        const res = await fetchWithAuth(`https://credcode-backend.onrender.com/api/finances/suggest-category/?description=${encodeURIComponent(newVal)}`)
         if (res.ok) {
           const data = await res.json()
           if (data.category) {
@@ -492,7 +492,7 @@ const saveTransaction = async () => {
           category: form.category
         }
 
-        await fetchWithAuth('http://localhost:8000/api/finances/expenses/', {
+        await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/expenses/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -510,7 +510,7 @@ const saveTransaction = async () => {
         category: form.category
       }
 
-      const response = await fetchWithAuth('http://localhost:8000/api/finances/expenses/', {
+      const response = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/expenses/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

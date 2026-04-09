@@ -52,7 +52,7 @@ const fetchWithAuth = async (url, options = {}) => {
     const refreshToken = localStorage.getItem('refresh_token')
     if (refreshToken) {
       try {
-        const refreshResponse = await fetch('http://localhost:8000/api/auth/refresh/', {
+        const refreshResponse = await fetch('https://credcode-backend.onrender.com/api/auth/refresh/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refresh: refreshToken })
@@ -87,8 +87,8 @@ const fetchWithAuth = async (url, options = {}) => {
 
 const fetchAlerts = async () => {
   try {
-    const expensesRes = await fetchWithAuth('http://localhost:8000/api/finances/expenses/')
-    const budgetsRes = await fetchWithAuth('http://localhost:8000/api/finances/budgets/')
+    const expensesRes = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/expenses/')
+    const budgetsRes = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/budgets/')
     
     let expenses = []
     let budgets = []
@@ -194,7 +194,7 @@ onMounted(async () => {
   if (token) {
     fetchAlerts()
     try {
-      const response = await fetchWithAuth('http://localhost:8000/api/finances/profile/')
+      const response = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/profile/')
       if (response.ok) {
         const data = await response.json()
         if (data.full_name) {

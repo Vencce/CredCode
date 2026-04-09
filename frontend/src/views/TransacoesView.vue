@@ -60,7 +60,7 @@ const fetchWithAuth = async (url, options = {}) => {
     const refreshToken = localStorage.getItem('refresh_token')
     if (refreshToken) {
       try {
-        const refreshResponse = await fetch('http://localhost:8000/api/auth/refresh/', {
+        const refreshResponse = await fetch('https://credcode-backend.onrender.com/api/auth/refresh/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refresh: refreshToken })
@@ -95,13 +95,13 @@ const fetchWithAuth = async (url, options = {}) => {
 
 const loadData = async () => {
   try {
-    const walletRes = await fetchWithAuth('http://localhost:8000/api/finances/wallets/')
+    const walletRes = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/wallets/')
     if (walletRes.ok) {
       const wallets = await walletRes.json()
       if (wallets.length > 0) defaultWalletId.value = wallets[0].id
     }
 
-    const expensesRes = await fetchWithAuth('http://localhost:8000/api/finances/expenses/')
+    const expensesRes = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/expenses/')
 
     if (expensesRes.ok) {
       const expenses = await expensesRes.json()
@@ -141,7 +141,7 @@ const loadData = async () => {
       }).reverse()
     }
 
-    const catRes = await fetchWithAuth('http://localhost:8000/api/finances/categories/')
+    const catRes = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/categories/')
     if (catRes.ok) {
       userCategories.value = await catRes.json()
     }
@@ -362,7 +362,7 @@ const saveTransaction = async () => {
           category: form.category
         }
 
-        await fetchWithAuth('http://localhost:8000/api/finances/expenses/', {
+        await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/expenses/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -381,8 +381,8 @@ const saveTransaction = async () => {
       }
 
       const url = editingId.value 
-        ? `http://localhost:8000/api/finances/expenses/${editingId.value}/`
-        : 'http://localhost:8000/api/finances/expenses/'
+        ? `https://credcode-backend.onrender.com/api/finances/expenses/${editingId.value}/`
+        : 'https://credcode-backend.onrender.com/api/finances/expenses/'
         
       const method = editingId.value ? 'PUT' : 'POST'
 
@@ -421,7 +421,7 @@ const executeDelete = async () => {
   if (!itemToDelete.value) return
 
   try {
-    const response = await fetchWithAuth(`http://localhost:8000/api/finances/expenses/${itemToDelete.value}/`, {
+    const response = await fetchWithAuth(`https://credcode-backend.onrender.com/api/finances/expenses/${itemToDelete.value}/`, {
       method: 'DELETE'
     })
 

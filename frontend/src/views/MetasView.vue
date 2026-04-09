@@ -52,7 +52,7 @@ const fetchWithAuth = async (url, options = {}) => {
     const refreshToken = localStorage.getItem('refresh_token')
     if (refreshToken) {
       try {
-        const refreshResponse = await fetch('http://localhost:8000/api/auth/refresh/', {
+        const refreshResponse = await fetch('https://credcode-backend.onrender.com/api/auth/refresh/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refresh: refreshToken })
@@ -87,7 +87,7 @@ const fetchWithAuth = async (url, options = {}) => {
 
 const loadData = async () => {
   try {
-    const goalsRes = await fetchWithAuth('http://localhost:8000/api/finances/goals/')
+    const goalsRes = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/goals/')
     if (goalsRes.ok) {
       const data = await goalsRes.json()
       goals.value = data.map(g => {
@@ -175,8 +175,8 @@ const saveGoal = async () => {
 
   try {
     const url = editingId.value 
-      ? `http://localhost:8000/api/finances/goals/${editingId.value}/`
-      : 'http://localhost:8000/api/finances/goals/'
+      ? `https://credcode-backend.onrender.com/api/finances/goals/${editingId.value}/`
+      : 'https://credcode-backend.onrender.com/api/finances/goals/'
       
     const method = editingId.value ? 'PATCH' : 'POST'
 
@@ -211,7 +211,7 @@ const addFunds = async () => {
   }
 
   try {
-    const response = await fetchWithAuth(`http://localhost:8000/api/finances/goals/${selectedGoal.value.id}/`, {
+    const response = await fetchWithAuth(`https://credcode-backend.onrender.com/api/finances/goals/${selectedGoal.value.id}/`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -243,7 +243,7 @@ const executeDelete = async () => {
   if (!itemToDelete.value) return
 
   try {
-    const response = await fetchWithAuth(`http://localhost:8000/api/finances/goals/${itemToDelete.value}/`, {
+    const response = await fetchWithAuth(`https://credcode-backend.onrender.com/api/finances/goals/${itemToDelete.value}/`, {
       method: 'DELETE'
     })
 

@@ -39,7 +39,7 @@ const fetchWithAuth = async (url, options = {}) => {
 
 const loadData = async () => {
   try {
-    const res = await fetchWithAuth('http://localhost:8000/api/finances/loans/')
+    const res = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/loans/')
     if (res.ok) {
       loans.value = await res.json()
     }
@@ -73,7 +73,7 @@ const openModal = (item = null) => {
 
 const saveLoan = async () => {
   const method = editingId.value ? 'PUT' : 'POST'
-  const url = editingId.value ? `http://localhost:8000/api/finances/loans/${editingId.value}/` : 'http://localhost:8000/api/finances/loans/'
+  const url = editingId.value ? `https://credcode-backend.onrender.com/api/finances/loans/${editingId.value}/` : 'https://credcode-backend.onrender.com/api/finances/loans/'
   
   const res = await fetchWithAuth(url, {
     method,
@@ -89,7 +89,7 @@ const saveLoan = async () => {
 }
 
 const togglePaid = async (item) => {
-  const res = await fetchWithAuth(`http://localhost:8000/api/finances/loans/${item.id}/`, {
+  const res = await fetchWithAuth(`https://credcode-backend.onrender.com/api/finances/loans/${item.id}/`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ is_paid: !item.is_paid })
@@ -98,7 +98,7 @@ const togglePaid = async (item) => {
 }
 
 const executeDelete = async () => {
-  const res = await fetchWithAuth(`http://localhost:8000/api/finances/loans/${itemToDelete.value}/`, { method: 'DELETE' })
+  const res = await fetchWithAuth(`https://credcode-backend.onrender.com/api/finances/loans/${itemToDelete.value}/`, { method: 'DELETE' })
   if (res.ok) { showToast('Removido!', 'success'); showDeleteModal.value = false; loadData() }
 }
 </script>

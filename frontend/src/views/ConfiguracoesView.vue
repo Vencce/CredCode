@@ -44,7 +44,7 @@ const fetchWithAuth = async (url, options = {}) => {
     const refreshToken = localStorage.getItem('refresh_token')
     if (refreshToken) {
       try {
-        const refreshResponse = await fetch('http://localhost:8000/api/auth/refresh/', {
+        const refreshResponse = await fetch('https://credcode-backend.onrender.com/api/auth/refresh/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refresh: refreshToken })
@@ -79,13 +79,13 @@ const fetchWithAuth = async (url, options = {}) => {
 
 const loadData = async () => {
   try {
-    const profRes = await fetchWithAuth('http://localhost:8000/api/finances/profile/')
+    const profRes = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/profile/')
     if (profRes.ok) {
       const data = await profRes.json()
       profileForm.fullName = data.full_name
     }
 
-    const catRes = await fetchWithAuth('http://localhost:8000/api/finances/categories/')
+    const catRes = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/categories/')
     if (catRes.ok) {
       categories.value = await catRes.json()
     }
@@ -111,7 +111,7 @@ const saveProfile = async () => {
   }
   
   try {
-    const res = await fetchWithAuth('http://localhost:8000/api/finances/profile/', {
+    const res = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/profile/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ full_name: profileForm.fullName })
@@ -137,7 +137,7 @@ const addCategory = async () => {
   }
 
   try {
-    const res = await fetchWithAuth('http://localhost:8000/api/finances/categories/', {
+    const res = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/categories/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -160,7 +160,7 @@ const addCategory = async () => {
 
 const deleteCategory = async (id) => {
   try {
-    const res = await fetchWithAuth(`http://localhost:8000/api/finances/categories/${id}/`, {
+    const res = await fetchWithAuth(`https://credcode-backend.onrender.com/api/finances/categories/${id}/`, {
       method: 'DELETE'
     })
 

@@ -53,7 +53,7 @@ const fetchWithAuth = async (url, options = {}) => {
     const refreshToken = localStorage.getItem('refresh_token')
     if (refreshToken) {
       try {
-        const refreshResponse = await fetch('http://localhost:8000/api/auth/refresh/', {
+        const refreshResponse = await fetch('https://credcode-backend.onrender.com/api/auth/refresh/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refresh: refreshToken })
@@ -210,8 +210,8 @@ const handleThemeChange = () => {
 const loadData = async () => {
   try {
     const [expensesRes, flowRes] = await Promise.all([
-      fetchWithAuth('http://localhost:8000/api/finances/expenses/'),
-      fetchWithAuth('http://localhost:8000/api/finances/cash-flow/')
+      fetchWithAuth('https://credcode-backend.onrender.com/api/finances/expenses/'),
+      fetchWithAuth('https://credcode-backend.onrender.com/api/finances/cash-flow/')
     ])
     
     if (expensesRes.ok && flowRes.ok) {

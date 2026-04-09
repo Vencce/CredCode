@@ -50,7 +50,7 @@ onMounted(async () => {
   }
 
   try {
-    const response = await fetch('http://localhost:8000/api/finances/profile/', {
+    const response = await fetch('https://credcode-backend.onrender.com/api/finances/profile/', {
       method: 'GET',
       headers: { 'Authorization': `Bearer ${token}` }
     });
@@ -77,7 +77,7 @@ const prev = () => { if (currentStep.value > 1) currentStep.value--; };
 const finish = async () => {
   try {
     const token = localStorage.getItem('access_token');
-    const response = await fetch('http://localhost:8000/api/finances/profile/', {
+    const response = await fetch('https://credcode-backend.onrender.com/api/finances/profile/', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
