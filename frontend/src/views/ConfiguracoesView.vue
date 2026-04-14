@@ -8,6 +8,7 @@ import FooterComp from '../components/FooterComp.vue'
 const router = useRouter()
 const isAuthorized = ref(false)
 const activeTab = ref('profile')
+const isGenerating = ref(false)
 
 const toast = reactive({
   show: false,
@@ -158,6 +159,49 @@ const addCategory = async () => {
   }
 }
 
+const generateEssentialCategories = async () => {
+  isGenerating.value = true
+  const essentials = [
+    { name: 'Alimentação', type: 'expense' },
+    { name: 'Moradia', type: 'expense' },
+    { name: 'Transporte', type: 'expense' },
+    { name: 'Saúde', type: 'expense' },
+    { name: 'Despesas Fixas', type: 'expense' },
+    { name: 'Lazer', type: 'expense' },
+    { name: 'Educação', type: 'expense' },
+    { name: 'Outros', type: 'expense' },
+    { name: 'Salário', type: 'income' },
+    { name: 'Transferência', type: 'income' }
+  ]
+
+  let addedCount = 0
+
+  for (const cat of essentials) {
+    const exists = categories.value.find(c => c.name.toLowerCase() === cat.name.toLowerCase() && c.type === cat.type)
+    if (!exists) {
+      try {
+        const res = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/categories/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cat)
+        })
+        if (res.ok) {
+          addedCount++
+        }
+      } catch (e) {
+      }
+    }
+  }
+
+  if (addedCount > 0) {
+    showToast(`${addedCount} categorias essenciais adicionadas!`, 'success')
+    await loadData()
+  } else {
+    showToast('As categorias essenciais já estão configuradas.', 'success')
+  }
+  isGenerating.value = false
+}
+
 const deleteCategory = async (id) => {
   try {
     const res = await fetchWithAuth(`https://credcode-backend.onrender.com/api/finances/categories/${id}/`, {
@@ -222,6 +266,13 @@ const deleteCategory = async (id) => {
         <button type="submit" class="btn-save">Adicionar</button>
       </form>
 
+      <div class="categories-header-row">
+        <h3>Categorias Cadastradas</h3>
+        <button type="button" class="btn-generate" @click="generateEssentialCategories" :disabled="isGenerating">
+          ✨ Gerar Essenciais
+        </button>
+      </div>
+
       <div v-if="categories.length === 0" class="empty-state">
         Nenhuma categoria personalizada criada ainda.
       </div>
@@ -268,6 +319,14 @@ const deleteCategory = async (id) => {
 
 .add-category-row { display: flex; gap: 15px; align-items: flex-end; margin-bottom: 35px; padding-bottom: 35px; border-bottom: 1px solid var(--border-color); }
 
+.categories-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.categories-header-row h3 { color: var(--text-primary); font-size: 1.2rem; font-weight: 800; margin: 0; }
+
+.btn-generate { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #f7b500; border: none; padding: 10px 18px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 8px; }
+.btn-generate:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.btn-generate:disabled { opacity: 0.7; cursor: not-allowed; }
+[data-theme="dark"] .btn-generate { background: linear-gradient(135deg, #f7b500 0%, #e6a800 100%); color: #0f172a; }
+
 .empty-state { text-align: center; padding: 40px; color: var(--text-secondary); font-weight: 500; background: var(--input-bg); border-radius: 12px; border: 1px dashed var(--border-input); transition: all 0.3s; }
 
 .categories-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; }
@@ -288,5 +347,7 @@ const deleteCategory = async (id) => {
   .btn-save { width: 100%; }
   .tabs-container { flex-direction: column; gap: 10px; border-bottom: none; }
   .tab-btn { width: 100%; text-align: center; }
+  .categories-header-row { flex-direction: column; align-items: flex-start; gap: 15px; }
+  .btn-generate { width: 100%; justify-content: center; }
 }
 </style>
