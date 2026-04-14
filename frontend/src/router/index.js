@@ -84,6 +84,12 @@ const router = createRouter({
       name: 'fluxo-caixa',
       component: () => import('../views/FluxoCaixaView.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/pokemon',
+      name: 'pokemon',
+      component: () => import('../views/PokemonView.vue'),
+      meta: { requiresAuth: true }
     }
   ],
 })
