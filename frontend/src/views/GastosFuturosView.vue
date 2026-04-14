@@ -356,6 +356,38 @@ const executeDelete = async () => {
     closeDeleteModal()
   }
 }
+
+const markAsPaid = async (item) => {
+  try {
+    if (!defaultWalletId.value) return
+
+    const today = new Date().toISOString().split('T')[0]
+    const finalAmount = item.type === 'expense' ? -Math.abs(item.amount) : Math.abs(item.amount)
+
+    const payload = {
+      wallet: defaultWalletId.value,
+      description: item.description,
+      amount: Number(finalAmount.toFixed(2)),
+      date: today,
+      category: item.category
+    }
+
+    const response = await fetchWithAuth(`https://credcode-backend.onrender.com/api/finances/expenses/${item.id}/`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+
+    if (response.ok) {
+      showToast('Confirmado! Lançamento marcado como pago.', 'success')
+      loadData()
+    } else {
+      showToast('Erro ao confirmar pagamento.', 'error')
+    }
+  } catch (error) {
+    showToast('Erro de conexão.', 'error')
+  }
+}
 </script>
 
 <template>
@@ -471,6 +503,9 @@ const executeDelete = async () => {
               {{ item.type === 'income' ? '+' : '-' }} {{ formatCurrency(Math.abs(item.amount)) }}
             </td>
             <td class="align-center actions-cell">
+              <button class="action-icon icon-success" title="Marcar como Pago" @click="markAsPaid(item)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              </button>
               <button class="action-icon" title="Editar" @click="openModal(item.type, item)">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
               </button>
@@ -894,6 +929,12 @@ const executeDelete = async () => {
   color: var(--text-primary);
   border-color: var(--text-secondary);
   transform: translateY(-2px);
+}
+
+.icon-success:hover {
+  background: var(--positive-bg);
+  color: #10b981;
+  border-color: #a7f3d0;
 }
 
 .icon-danger:hover {
