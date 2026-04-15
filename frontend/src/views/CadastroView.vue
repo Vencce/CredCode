@@ -14,6 +14,7 @@ const form = reactive({
 
 const showPassword = ref(false)
 const showConfirmPassword = ref(false)
+const isLoading = ref(false)
 
 const toast = reactive({
   show: false,
@@ -33,8 +34,10 @@ const handleRegister = async () => {
     return
   }
 
+  isLoading.value = true
+
   try {
-    const response = await fetch('https://credcode-backend.onrender.com/api/auth/register/', {
+    const registerResponse = await fetch('https://credcode-backend.onrender.com/api/auth/register/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -44,17 +47,44 @@ const handleRegister = async () => {
       })
     })
 
-    if (response.ok) {
-      showToast('Cadastro realizado com sucesso!', 'success')
-      setTimeout(() => {
-        router.push('/')
-      }, 1500)
+    if (registerResponse.ok) {
+      showToast('Conta criada! Autenticando...', 'success')
+      
+      const loginResponse = await fetch('https://credcode-backend.onrender.com/api/auth/login/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: form.username,
+          password: form.password
+        })
+      })
+
+      if (loginResponse.ok) {
+        const data = await loginResponse.json()
+        localStorage.setItem('access_token', data.access)
+        localStorage.setItem('refresh_token', data.refresh)
+        
+        if (data.has_profile !== undefined) {
+          localStorage.setItem('has_profile', data.has_profile)
+        }
+        
+        setTimeout(() => {
+          router.push('/home')
+        }, 1000)
+      } else {
+        showToast('Cadastro concluído, mas falha no auto-login.', 'warning')
+        setTimeout(() => {
+          router.push('/')
+        }, 1500)
+      }
     } else {
-      const data = await response.json()
-      showToast(data.detail || 'Erro ao realizar o cadastro', 'error')
+      const data = await registerResponse.json()
+      showToast(data.detail || data.username?.[0] || 'Erro ao realizar o cadastro', 'error')
+      isLoading.value = false
     }
   } catch (error) {
     showToast('Erro de conexão com o terminal.', 'error')
+    isLoading.value = false
   }
 }
 </script>
@@ -94,6 +124,7 @@ const handleRegister = async () => {
               type="text"
               placeholder="Nome de utilizador"
               required
+              :disabled="isLoading"
             />
           </div>
 
@@ -103,6 +134,7 @@ const handleRegister = async () => {
               type="email"
               placeholder="E-mail"
               required
+              :disabled="isLoading"
             />
           </div>
 
@@ -112,8 +144,9 @@ const handleRegister = async () => {
               :type="showPassword ? 'text' : 'password'"
               placeholder="Senha"
               required
+              :disabled="isLoading"
             />
-            <button type="button" class="btn-eye" @click="showPassword = !showPassword">
+            <button type="button" class="btn-eye" @click="showPassword = !showPassword" :disabled="isLoading">
               <svg v-if="!showPassword" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
                 <circle cx="12" cy="12" r="3"></circle>
@@ -133,8 +166,9 @@ const handleRegister = async () => {
               :type="showConfirmPassword ? 'text' : 'password'"
               placeholder="Confirme sua Senha"
               required
+              :disabled="isLoading"
             />
-            <button type="button" class="btn-eye" @click="showConfirmPassword = !showConfirmPassword">
+            <button type="button" class="btn-eye" @click="showConfirmPassword = !showConfirmPassword" :disabled="isLoading">
               <svg v-if="!showConfirmPassword" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
                 <circle cx="12" cy="12" r="3"></circle>
@@ -148,7 +182,10 @@ const handleRegister = async () => {
             </button>
           </div>
 
-          <button type="submit" class="btn-login btn-register">CADASTRAR</button>
+          <button type="submit" class="btn-login btn-register" :disabled="isLoading">
+            <span v-if="!isLoading">CADASTRAR</span>
+            <span v-else class="spinner"></span>
+          </button>
         </form>
 
         <p class="register-link">Já tem acesso? <RouterLink to="/">Entrar</RouterLink></p>
@@ -317,6 +354,11 @@ const handleRegister = async () => {
   color: #0f172a;
 }
 
+.input-group input:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 .input-group input::placeholder {
   color: #94a3b8;
   font-weight: 500;
@@ -352,7 +394,7 @@ const handleRegister = async () => {
   transition: color 0.2s;
 }
 
-.btn-eye:hover {
+.btn-eye:hover:not(:disabled) {
   color: #0f172a;
 }
 
@@ -370,15 +412,38 @@ const handleRegister = async () => {
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 10px 15px -3px rgba(247, 181, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60px;
 }
 
 .btn-register {
   margin-top: 10px;
 }
 
-.btn-login:hover {
+.btn-login:hover:not(:disabled) {
   transform: translateY(-3px);
   box-shadow: 0 15px 25px -5px rgba(247, 181, 0, 0.4);
+}
+
+.btn-login:disabled {
+  opacity: 0.8;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(15, 23, 42, 0.2);
+  border-radius: 50%;
+  border-top-color: #0f172a;
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .register-link {

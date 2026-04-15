@@ -1402,7 +1402,7 @@ const formatCurrency = (value) => {
   
   .desktop-only { display: none; }
   .mobile-only { display: block; }
-  
+   
   .mobile-transactions-list {
     background: var(--bg-card);
     border-radius: 16px;

@@ -267,15 +267,16 @@ onUnmounted(() => {
           <span v-if="sidebarOpen" class="nav-text">Relatórios</span>
         </RouterLink>
 
+        <RouterLink to="/pokemon" class="nav-item" :class="{ active: isActive('/pokemon') }" @click="closeMobileMenu">
+          <span class="icon"><i class="fa-solid fa-gamepad" style="color: rgb(255, 255, 255);"></i></span>
+          <span v-if="sidebarOpen" class="nav-text">TCG Market</span>
+        </RouterLink>
+
         <RouterLink to="/configuracoes" class="nav-item" :class="{ active: isActive('/configuracoes') }" @click="closeMobileMenu">
           <span class="icon"><i class="fa-solid fa-gear" style="color: rgb(255, 255, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">Configurações</span>
         </RouterLink>
 
-        <RouterLink to="/pokemon" class="nav-item" :class="{ active: isActive('/pokemon') }" @click="closeMobileMenu">
-          <span class="icon"><i class="fa-solid fa-gamepad" style="color: rgb(255, 255, 255);"></i></span>
-          <span v-if="sidebarOpen" class="nav-text">TCG Market</span>
-        </RouterLink>
       </nav>
       
       <button class="toggle-btn" @click="toggleSidebar">
