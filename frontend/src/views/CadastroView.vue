@@ -63,17 +63,10 @@ const handleRegister = async () => {
         const data = await loginResponse.json()
         localStorage.setItem('access_token', data.access)
         localStorage.setItem('refresh_token', data.refresh)
-        
-        if (data.has_profile !== undefined) {
-          localStorage.setItem('has_profile', data.has_profile)
-        }
+        localStorage.setItem('has_profile', 'false')
         
         setTimeout(() => {
-          if (data.has_profile) {
-            router.push('/home')
-          } else {
-            router.push('/formulario')
-          }
+          router.push('/formulario')
         }, 1000)
       } else {
         showToast('Cadastro concluído, mas falha no auto-login.', 'warning')
