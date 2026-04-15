@@ -69,7 +69,11 @@ const handleRegister = async () => {
         }
         
         setTimeout(() => {
-          router.push('/home')
+          if (data.has_profile) {
+            router.push('/home')
+          } else {
+            router.push('/formulario')
+          }
         }, 1000)
       } else {
         showToast('Cadastro concluído, mas falha no auto-login.', 'warning')
@@ -484,8 +488,30 @@ const handleRegister = async () => {
   .left-side {
     display: none;
   }
+  .right-side {
+    flex: 1;
+    width: 100%;
+    padding: 20px;
+  }
   .login-card {
     padding: 40px 25px;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-card {
+    padding: 30px 20px;
+  }
+  .main-logo {
+    font-size: 2.4rem;
+  }
+  .login-title {
+    font-size: 1.1rem;
+  }
+  .btn-login {
+    padding: 16px;
+    font-size: 1rem;
   }
 }
 </style>
