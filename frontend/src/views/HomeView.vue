@@ -190,10 +190,20 @@ const fetchWithAuth = async (url, options = {}) => {
   return response
 }
 
-const loadCards = () => {
-  const saved = localStorage.getItem('finances_cards')
-  if (saved) {
-    cards.value = JSON.parse(saved)
+const loadCards = async () => {
+  try {
+    const res = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/cards/')
+    if (res.ok) {
+      const data = await res.json()
+      cards.value = data.map(c => ({
+        id: c.id,
+        name: c.name,
+        limit: parseFloat(c.limit),
+        used: parseFloat(c.used)
+      }))
+    }
+  } catch (error) {
+    showToast('Erro ao carregar cartões.', 'error')
   }
 }
 
@@ -328,7 +338,7 @@ const loadData = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   const token = localStorage.getItem('access_token')
   
   if (!token) {
@@ -338,8 +348,8 @@ onMounted(() => {
     }, 1500)
   } else {
     isAuthorized.value = true
-    loadCards()
-    loadData()
+    await loadCards()
+    await loadData()
     window.addEventListener('resize', handleResize)
     window.addEventListener('theme-changed', handleThemeChange)
   }
@@ -418,51 +428,66 @@ const saveTransaction = async () => {
       return
     }
 
-    const cardIndex = cards.value.findIndex(c => c.id === form.cardId)
-    if (cardIndex === -1) {
+    const card = cards.value.find(c => c.id === form.cardId)
+    if (!card) {
       showToast('Cartão não encontrado.', 'error')
       return
     }
-
-    const card = cards.value[cardIndex]
 
     if (card.used + finalAmount > card.limit) {
       showToast('Limite insuficiente no cartão.', 'error')
       return
     }
 
-    card.used += finalAmount
+    try {
+      const newUsed = card.used + finalAmount
 
-    if (form.isInstallment && form.installmentsCount > 1) {
-      const valPerInstallment = Number((finalAmount / form.installmentsCount).toFixed(2))
-      const baseDate = new Date(form.date + 'T12:00:00')
-      
-      for (let i = 1; i <= form.installmentsCount; i++) {
-        const installmentDate = new Date(baseDate)
-        installmentDate.setMonth(installmentDate.getMonth() + (i - 1))
+      if (form.isInstallment && form.installmentsCount > 1) {
+        const valPerInstallment = Number((finalAmount / form.installmentsCount).toFixed(2))
+        const baseDate = new Date(form.date + 'T12:00:00')
         
-        card.expenses.push({
-          id: Date.now() + i,
-          description: `${form.description} (${i}/${form.installmentsCount})`,
-          amount: valPerInstallment,
-          date: installmentDate.toISOString().split('T')[0],
-          category: form.category
+        for (let i = 1; i <= form.installmentsCount; i++) {
+          const installmentDate = new Date(baseDate)
+          installmentDate.setMonth(installmentDate.getMonth() + (i - 1))
+          
+          await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/card-expenses/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              card: card.id,
+              description: `${form.description} (${i}/${form.installmentsCount})`,
+              amount: valPerInstallment,
+              date: installmentDate.toISOString().split('T')[0]
+            })
+          })
+        }
+      } else {
+        await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/card-expenses/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            card: card.id,
+            description: form.description,
+            amount: finalAmount,
+            date: form.date
+          })
         })
       }
-    } else {
-      card.expenses.push({
-        id: Date.now(),
-        description: form.description,
-        amount: finalAmount,
-        date: form.date,
-        category: form.category
-      })
-    }
 
-    localStorage.setItem('finances_cards', JSON.stringify(cards.value))
-    showToast('Compra lançada no cartão com sucesso!', 'success')
-    closeModal()
-    return
+      await fetchWithAuth(`https://credcode-backend.onrender.com/api/finances/cards/${card.id}/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ used: newUsed })
+      })
+
+      showToast('Compra lançada no cartão com sucesso!', 'success')
+      closeModal()
+      await loadCards()
+      return
+    } catch (e) {
+      showToast('Erro ao lançar compra no cartão.', 'error')
+      return
+    }
   }
 
   if (!defaultWalletId.value) {
