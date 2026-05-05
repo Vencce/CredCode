@@ -82,3 +82,24 @@ class Loan(models.Model):
 
     def __str__(self):
         return f"{self.debtor_name} - {self.amount}"
+
+class CreditCard(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    name = models.CharField(max_length=100)
+    flag = models.CharField(max_length=50)
+    limit = models.DecimalField(max_digits=10, decimal_places=2)
+    used = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    closing_day = models.IntegerField()
+    due_day = models.IntegerField()
+
+    def __str__(self):
+        return f"{self.name} - {self.user.username}"
+
+class CardExpense(models.Model):
+    card = models.ForeignKey(CreditCard, related_name='expenses', on_delete=models.CASCADE)
+    description = models.CharField(max_length=200)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    date = models.DateField()
+
+    def __str__(self):
+        return self.description

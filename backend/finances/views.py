@@ -11,9 +11,10 @@ from django.db.models import Count
 from .serializers import (
     RegisterSerializer, WalletSerializer, ExpenseSerializer, 
     ProfileSerializer, BudgetSerializer, CategorySerializer, 
-    GoalSerializer, InvestmentSerializer, LoanSerializer
+    GoalSerializer, InvestmentSerializer, LoanSerializer,
+    CreditCardSerializer, CardExpenseSerializer
 )
-from .models import Wallet, Expense, Profile, Budget, Category, Goal, Investment, Loan
+from .models import Wallet, Expense, Profile, Budget, Category, Goal, Investment, Loan, CreditCard, CardExpense
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -83,6 +84,28 @@ class LoanViewSet(viewsets.ModelViewSet):
         
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+class CreditCardViewSet(viewsets.ModelViewSet):
+    serializer_class = CreditCardSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        return CreditCard.objects.filter(user=self.request.user)
+        
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+class CardExpenseViewSet(viewsets.ModelViewSet):
+    serializer_class = CardExpenseSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        return CardExpense.objects.filter(card__user=self.request.user)
+
+    def perform_create(self, serializer):
+        card_id = self.request.data.get('card')
+        card = CreditCard.objects.get(id=card_id, user=self.request.user)
+        serializer.save(card=card)
 
 class ProfileView(APIView):
     permission_classes = [IsAuthenticated]

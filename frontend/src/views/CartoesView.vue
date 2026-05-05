@@ -143,15 +143,30 @@ const loadBalance = async () => {
   }
 }
 
-const loadCards = () => {
-  const saved = localStorage.getItem('finances_cards')
-  if (saved) {
-    cards.value = JSON.parse(saved)
+const loadCards = async () => {
+  try {
+    const res = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/cards/')
+    if (res.ok) {
+      const data = await res.json()
+      cards.value = data.map(c => ({
+        id: c.id,
+        name: c.name,
+        flag: c.flag,
+        limit: parseFloat(c.limit),
+        used: parseFloat(c.used),
+        closingDay: c.closing_day,
+        dueDay: c.due_day,
+        expenses: c.expenses.map(e => ({
+          id: e.id,
+          description: e.description,
+          amount: parseFloat(e.amount),
+          date: e.date
+        }))
+      }))
+    }
+  } catch (error) {
+    showToast('Erro ao carregar cartões da nuvem.', 'error')
   }
-}
-
-const saveCards = () => {
-  localStorage.setItem('finances_cards', JSON.stringify(cards.value))
 }
 
 onMounted(async () => {
@@ -163,7 +178,7 @@ onMounted(async () => {
     }, 1500)
   } else {
     isAuthorized.value = true
-    loadCards()
+    await loadCards()
     await loadBalance()
   }
 })
@@ -181,7 +196,7 @@ const getFlagIcon = (flag) => {
 }
 
 const openModal = () => {
-  form.id = Date.now().toString()
+  form.id = null
   form.name = ''
   form.limit = ''
   form.closingDay = ''
@@ -193,27 +208,38 @@ const closeModal = () => {
   showModal.value = false
 }
 
-const saveCard = () => {
+const saveCard = async () => {
   if (!form.name || !form.limit || !form.closingDay || !form.dueDay) {
     showToast('Preencha os campos obrigatórios.', 'error')
     return
   }
 
-  const newCard = {
-    id: form.id,
+  const payload = {
     name: form.name,
     flag: form.flag,
     limit: parseFloat(form.limit),
     used: 0,
-    closingDay: parseInt(form.closingDay),
-    dueDay: parseInt(form.dueDay),
-    expenses: []
+    closing_day: parseInt(form.closingDay),
+    due_day: parseInt(form.dueDay)
   }
 
-  cards.value.push(newCard)
-  saveCards()
-  closeModal()
-  showToast('Cartão cadastrado!', 'success')
+  try {
+    const res = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/cards/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    
+    if (res.ok) {
+      showToast('Cartão cadastrado!', 'success')
+      closeModal()
+      loadCards()
+    } else {
+      showToast('Erro ao cadastrar cartão.', 'error')
+    }
+  } catch (e) {
+    showToast('Erro de conexão.', 'error')
+  }
 }
 
 const openExpenseModal = (id) => {
@@ -292,23 +318,23 @@ const groupedInvoices = computed(() => {
   })
 })
 
-const addCardExpense = () => {
+const addCardExpense = async () => {
   const amount = parseFloat(expenseForm.amount)
   if (!expenseForm.description || !amount || amount <= 0) {
     showToast('Preencha os dados da compra.', 'error')
     return
   }
 
-  const cardIndex = cards.value.findIndex(c => c.id === selectedCardId.value)
-  if (cardIndex !== -1) {
-    const card = cards.value[cardIndex]
-    
-    if (card.used + amount > card.limit) {
-      showToast('Limite insuficiente!', 'error')
-      return
-    }
+  const card = cards.value.find(c => c.id === selectedCardId.value)
+  if (!card) return
+  
+  if (card.used + amount > card.limit) {
+    showToast('Limite insuficiente!', 'error')
+    return
+  }
 
-    card.used += amount
+  try {
+    const newUsed = card.used + amount
 
     if (expenseForm.isInstallment && expenseForm.installmentsCount > 1) {
       const valPerInstallment = Number((amount / expenseForm.installmentsCount).toFixed(2))
@@ -318,25 +344,41 @@ const addCardExpense = () => {
         const installmentDate = new Date(baseDate)
         installmentDate.setMonth(installmentDate.getMonth() + (i - 1))
         
-        card.expenses.push({
-          id: Date.now() + i,
-          description: `${expenseForm.description} (${i}/${expenseForm.installmentsCount})`,
-          amount: valPerInstallment,
-          date: installmentDate.toISOString().split('T')[0]
+        await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/card-expenses/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            card: card.id,
+            description: `${expenseForm.description} (${i}/${expenseForm.installmentsCount})`,
+            amount: valPerInstallment,
+            date: installmentDate.toISOString().split('T')[0]
+          })
         })
       }
     } else {
-      card.expenses.push({
-        id: Date.now(),
-        description: expenseForm.description,
-        amount: amount,
-        date: expenseForm.date
+      await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/card-expenses/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          card: card.id,
+          description: expenseForm.description,
+          amount: amount,
+          date: expenseForm.date
+        })
       })
     }
 
-    saveCards()
-    closeExpenseModal()
+    await fetchWithAuth(`https://credcode-backend.onrender.com/api/finances/cards/${card.id}/`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ used: newUsed })
+    })
+
     showToast('Compra registrada na fatura!', 'success')
+    closeExpenseModal()
+    loadCards()
+  } catch (e) {
+    showToast('Erro ao lançar compra.', 'error')
   }
 }
 
@@ -381,17 +423,19 @@ const paySpecificExpense = async (expense) => {
       return
     }
 
-    userData.balance -= expense.amount
+    const card = cards.value.find(c => c.id === activeCardId.value)
+    const newUsed = Math.max(0, card.used - expense.amount)
 
-    const cardIndex = cards.value.findIndex(c => c.id === activeCardId.value)
-    if (cardIndex !== -1) {
-      const card = cards.value[cardIndex]
-      card.used = Math.max(0, card.used - expense.amount)
-      card.expenses = card.expenses.filter(e => e.id !== expense.id)
-      saveCards()
-    }
+    await fetchWithAuth(`https://credcode-backend.onrender.com/api/finances/card-expenses/${expense.id}/`, { method: 'DELETE' })
+    
+    await fetchWithAuth(`https://credcode-backend.onrender.com/api/finances/cards/${card.id}/`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ used: newUsed })
+    })
 
     await loadBalance()
+    await loadCards()
     showToast('Parcela antecipada com sucesso!', 'success')
   } catch (e) {
     showToast('Erro de conexão.', 'error')
@@ -399,69 +443,82 @@ const paySpecificExpense = async (expense) => {
 }
 
 const payInvoice = async (id) => {
-  const cardIndex = cards.value.findIndex(c => c.id === id)
-  if (cardIndex !== -1) {
-    const card = cards.value[cardIndex]
+  const card = cards.value.find(c => c.id === id)
+  if (!card) return
 
-    if (currentInvoiceTotal.value > 0) {
-      if (!defaultWalletId.value) {
-        showToast('Carteira principal não encontrada.', 'error')
+  if (currentInvoiceTotal.value > 0) {
+    if (!defaultWalletId.value) {
+      showToast('Carteira principal não encontrada.', 'error')
+      return
+    }
+
+    if (currentInvoiceTotal.value > userData.balance) {
+      showToast('Saldo insuficiente em conta.', 'error')
+      return
+    }
+
+    const payload = {
+      wallet: defaultWalletId.value,
+      description: `[Cartões] Fatura ${card.name} do Mês`,
+      amount: Number((-Math.abs(currentInvoiceTotal.value)).toFixed(2)),
+      date: new Date().toISOString().split('T')[0],
+      category: 'Contas'
+    }
+
+    try {
+      const res = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/expenses/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      if (!res.ok) {
+        showToast('Erro ao processar pagamento.', 'error')
         return
       }
-
-      if (currentInvoiceTotal.value > userData.balance) {
-        showToast('Saldo insuficiente em conta para pagar a fatura do mês.', 'error')
-        return
-      }
-
-      const payload = {
-        wallet: defaultWalletId.value,
-        description: `[Cartões] Fatura ${card.name} do Mês`,
-        amount: Number((-Math.abs(currentInvoiceTotal.value)).toFixed(2)),
-        date: new Date().toISOString().split('T')[0],
-        category: 'Contas'
-      }
-
-      try {
-        const res = await fetchWithAuth('https://credcode-backend.onrender.com/api/finances/expenses/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        })
-
-        if (!res.ok) {
-          showToast('Erro ao processar pagamento.', 'error')
-          return
-        }
-        
-        userData.balance -= currentInvoiceTotal.value
-      } catch (e) {
-        showToast('Erro de conexão.', 'error')
-        return
-      }
-
-      card.used = Math.max(0, card.used - currentInvoiceTotal.value)
+      
+      const newUsed = Math.max(0, card.used - currentInvoiceTotal.value)
       
       const expenseIdsToRemove = currentMonthExpenses.value.map(e => e.id)
-      card.expenses = card.expenses.filter(e => !expenseIdsToRemove.includes(e.id))
-      
-      saveCards()
+      for (let expId of expenseIdsToRemove) {
+         await fetchWithAuth(`https://credcode-backend.onrender.com/api/finances/card-expenses/${expId}/`, { method: 'DELETE' })
+      }
+
+      await fetchWithAuth(`https://credcode-backend.onrender.com/api/finances/cards/${card.id}/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ used: newUsed })
+      })
+
       await loadBalance()
-      showToast('Fatura do mês paga com sucesso!', 'success')
+      await loadCards()
+      showToast('Fatura paga com sucesso!', 'success')
       
       if (showInvoiceModal.value && activeCardId.value === id) {
         closeInvoiceModal()
       }
-    } else {
-      showToast('Fatura atual já está zerada.', 'success')
+    } catch (e) {
+      showToast('Erro de conexão.', 'error')
     }
+  } else {
+    showToast('Fatura atual já está zerada.', 'success')
   }
 }
 
-const deleteCard = (id) => {
-  cards.value = cards.value.filter(c => c.id !== id)
-  saveCards()
-  showToast('Cartão removido.', 'success')
+const deleteCard = async (id) => {
+  try {
+    const res = await fetchWithAuth(`https://credcode-backend.onrender.com/api/finances/cards/${id}/`, {
+      method: 'DELETE'
+    })
+    if (res.ok) {
+      showToast('Cartão removido.', 'success')
+      loadCards()
+    } else {
+      showToast('Erro ao remover cartão.', 'error')
+    }
+  } catch (e) {
+    showToast('Erro de conexão.', 'error')
+  }
 }
 </script>
 
