@@ -30,7 +30,7 @@ const currentYear = new Date().getFullYear()
 
 <style scoped>
 .creative-footer {
-  margin-top: 40px;
+  margin-top: auto;
   padding: 30px 40px;
   background: var(--bg-card);
   border-radius: 20px;
