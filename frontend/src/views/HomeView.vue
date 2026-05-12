@@ -19,14 +19,16 @@ const userData = reactive({
   name: 'Usuário',
   balance: 0,
   income: 0,
-  expenses: 0
+  expenses: 0,
+  allTimeIncome: 0,
+  allTimeExpenses: 0
 })
 
 const displayedBalance = ref(0)
 const totalInvestments = ref(0)
 const totalGoals = ref(0)
 
-const totalBalance = computed(() => userData.balance + userData.income - userData.expenses)
+const totalBalance = computed(() => userData.balance + userData.allTimeIncome - userData.allTimeExpenses)
 
 const recentTransactions = ref([])
 const recentTransactionsLimited = computed(() => recentTransactions.value.slice(0, 5))
@@ -250,17 +252,38 @@ const loadData = async () => {
     if (expensesRes.ok) {
       const expenses = await expensesRes.json()
       
-      let totalInc = 0
-      let totalExp = 0
+      let allTimeInc = 0
+      let allTimeExp = 0
+      let monthInc = 0
+      let monthExp = 0
+      
+      const now = new Date()
+      const currentMonth = now.getMonth()
+      const currentYear = now.getFullYear()
 
       recentTransactions.value = expenses.map(item => {
         const val = parseFloat(item.amount || item.value || 0)
-        if (val >= 0) totalInc += val
-        else totalExp += Math.abs(val)
+        
+        if (val >= 0) allTimeInc += val
+        else allTimeExp += Math.abs(val)
 
         const dateVal = item.date || item.created_at || ''
-        const dateParts = dateVal.split('-')
-        const formattedDate = dateParts.length === 3 ? `${dateParts[2].substring(0,2)}/${dateParts[1]}/${dateParts[0]}` : dateVal
+        let formattedDate = dateVal
+        
+        if (dateVal) {
+          const dateParts = dateVal.split('-')
+          if (dateParts.length === 3) {
+            formattedDate = `${dateParts[2].substring(0,2)}/${dateParts[1]}/${dateParts[0]}`
+            
+            const itemYear = parseInt(dateParts[0])
+            const itemMonth = parseInt(dateParts[1]) - 1
+            
+            if (itemYear === currentYear && itemMonth === currentMonth) {
+              if (val >= 0) monthInc += val
+              else monthExp += Math.abs(val)
+            }
+          }
+        }
 
         let desc = item.description || item.title || item.name || 'Sem descrição'
         if (desc.startsWith('[')) {
@@ -279,8 +302,10 @@ const loadData = async () => {
         }
       }).reverse()
 
-      userData.income = totalInc
-      userData.expenses = totalExp
+      userData.allTimeIncome = allTimeInc
+      userData.allTimeExpenses = allTimeExp
+      userData.income = monthInc
+      userData.expenses = monthExp
 
       nextTick(() => {
         if (userData.income > 0 || userData.expenses > 0) {
@@ -1188,12 +1213,12 @@ const formatCurrency = (value) => {
 }
 
 .type-badge.income {
-  background-color: var(--positive-bg);
+  background: var(--positive-bg);
   color: #059669;
 }
 
 .type-badge.expense {
-  background-color: var(--negative-bg);
+  background: var(--negative-bg);
   color: #dc2626;
 }
 
@@ -1409,19 +1434,19 @@ const formatCurrency = (value) => {
 
 @media (max-width: 768px) {
   .dashboard-header { flex-direction: column; align-items: flex-start; gap: 10px; }
-  .balance-card-primary { padding: 30px 25px; }
-  .amount-huge { font-size: 2.8rem; }
+  .balance-card-primary { padding: 30px 20px; }
+  .amount-huge { font-size: 2.4rem; }
   
   .net-worth-row { flex-direction: column; gap: 12px; }
   .total-item { border-left: none; padding-left: 0; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 12px; }
   
-  .summary-cards { flex-direction: row; gap: 15px; }
-  .summary-cards .card { padding: 15px; flex-direction: column; text-align: center; gap: 10px; }
-  .summary-cards .card-icon-wrapper { width: 40px; height: 40px; font-size: 1.2rem; }
-  .summary-cards .amount { font-size: 1.3rem; }
+  .summary-cards { flex-direction: column; gap: 15px; }
+  .summary-cards .card { padding: 20px; flex-direction: row; text-align: left; gap: 15px; }
+  .summary-cards .card-icon-wrapper { width: 50px; height: 50px; font-size: 1.4rem; }
+  .summary-cards .amount { font-size: 1.5rem; }
   
-  .action-panel { flex-direction: row; gap: 10px; }
-  .action-btn { padding: 12px; font-size: 0.95rem; }
+  .action-panel { flex-direction: column; gap: 12px; }
+  .action-btn { padding: 16px; font-size: 1rem; width: 100%; }
   
   .form-row { flex-direction: column; gap: 15px; }
   
