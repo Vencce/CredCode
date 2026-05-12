@@ -90,6 +90,12 @@ const router = createRouter({
       name: 'pokemon',
       component: () => import('../views/PokemonView.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/notas',
+      name: 'notas',
+      component: () => import('../views/NotasView.vue'),
+      meta: { requiresAuth: true }
     }
   ],
 })
@@ -106,4 +112,4 @@ router.beforeEach((to, from, next) => {
   } 
 })
 
-export default router
+export default router 

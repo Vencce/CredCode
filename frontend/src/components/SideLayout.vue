@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, reactive, computed, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, reactive, computed } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
@@ -270,6 +270,11 @@ onUnmounted(() => {
         <RouterLink to="/pokemon" class="nav-item" :class="{ active: isActive('/pokemon') }" @click="closeMobileMenu">
           <span class="icon"><i class="fa-solid fa-gamepad" style="color: rgb(255, 255, 255);"></i></span>
           <span v-if="sidebarOpen" class="nav-text">TCG Market</span>
+        </RouterLink>
+
+        <RouterLink to="/notas" class="nav-item" :class="{ active: isActive('/notas') }" @click="closeMobileMenu">
+          <span class="icon"><i class="fa-solid fa-note-sticky" style="color: rgb(255, 255, 255);"></i></span>
+          <span v-if="sidebarOpen" class="nav-text">Bloco de Notas</span>
         </RouterLink>
 
         <RouterLink to="/configuracoes" class="nav-item" :class="{ active: isActive('/configuracoes') }" @click="closeMobileMenu">

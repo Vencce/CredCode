@@ -12,9 +12,9 @@ from .serializers import (
     RegisterSerializer, WalletSerializer, ExpenseSerializer, 
     ProfileSerializer, BudgetSerializer, CategorySerializer, 
     GoalSerializer, InvestmentSerializer, LoanSerializer,
-    CreditCardSerializer, CardExpenseSerializer
+    CreditCardSerializer, CardExpenseSerializer, NoteSerializer
 )
-from .models import Wallet, Expense, Profile, Budget, Category, Goal, Investment, Loan, CreditCard, CardExpense
+from .models import Wallet, Expense, Profile, Budget, Category, Goal, Investment, Loan, CreditCard, CardExpense, Note
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -106,6 +106,16 @@ class CardExpenseViewSet(viewsets.ModelViewSet):
         card_id = self.request.data.get('card')
         card = CreditCard.objects.get(id=card_id, user=self.request.user)
         serializer.save(card=card)
+
+class NoteViewSet(viewsets.ModelViewSet):
+    serializer_class = NoteSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Note.objects.filter(user=self.request.user).order_by('-updated_at')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
 class ProfileView(APIView):
     permission_classes = [IsAuthenticated]
